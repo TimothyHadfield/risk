@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-20 (one auto-fit zoom).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-20 (sounds, celebrations and effects).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.
@@ -17,11 +17,13 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 | Computers Easy/Medium/Hard, measured (`js/strength.js`) | done |
 | Online rooms (shared `_online` module, project th-board-games) | done; two-browser run on the real project |
 | Study: lenses, luck, timeline, forecast | done |
+| Sounds, celebrations, effects (shared `js/fx.js` 1.0.3 + `js/fxrisk.js`), Settings > Sound & effects | done 2026-10-20 |
 
 ## Standing instructions (Tim's words)
 - "add risk, clue, battleship, connect four, stratego, clue, checkers, pandemic, splendor, king of tokyo, 7 wonders, and evolution to the list of games."
 - "the map of the US in TTR looks nothing like the US. Fix this and any other similar problems accross the games" (2026-10-20): maps must read as the real place (real coastlines, lakes, islands).
 - "some games have maps and whatnot you can zoom in and out of often. Make it so that there is only an auto zoom that automatically fits the whole board in sight and then you can zoom if you want with easily reseting back to auto mode." (2026-10-20; same behaviour in TTR, Risk, Pandemic, Carcassonne)
+- "add opptional sounds you can add to the games that reflect what's happening in the game accurately as well as win celebrations, and other fun annimations to go along with everything. Just make sure everything is customizable in the settings so the user can play as preffered." (2026-10-20)
 - From the briefs: exact classic board, 44-card deck, starting armies by player count, escalating and fixed card values, capital and secret-mission variants, own SVG map; exact battle odds, chain odds, expected losses, continent value; computers at measured strength; seats can be you, computer or online in any mix. $0, no copyrighted art or rulebook text.
 
 ## Measured computer strength (tools/measure.js, 400 games each, 2026-10-19)
@@ -69,7 +71,16 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - Controls bottom-left of the map, now on laptop too: + above -, fit beside +, placed in empty Pacific so they cover no territory or bonus badge at 393px.
 - Removed the old 2.1x zoom toggle (phone only). Turned phone: the board box shrinks (`max-height`) so the whole board stays on screen (it ran 24px off-screen before).
 
+## Sound & effects (2026-10-20)
+- `js/fx.js` is a byte-for-byte copy of `../_fx/fx.js` (never edit it; re-copy when the library changes). `js/fxrisk.js`: `events(prev, next, me)` diffs two tables (so your moves, computers' and online players' all sound the same; online = your seat, local = every person, computers-only = none) and `run()` plays them. Hooked in `render()` (`fxStep`); `fxReset()` on new game / reload / joining or leaving a room so nothing replays.
+- Event -> sound (+ effect): claim / setup army = `place` (quieter); reinforce = `place` + "+n" float on the badge; card trade = `cardSlide` + `cardFlip` + "+armies" float; one roll = one `dieRoll` per die thrown (attack + defence, 45 ms apart), `diceLand` at 330 ms as the drawn dice settle, then one `thud` per army lost (max 3) + "−n" floats on both badges, dice row shakes when only the attacker lost; blitz = `diceShake` + quick burst of up to 6 `dieRoll`, `diceLand`, up to 5 thuds; move in / end-of-turn move = `slide` + "+n"; territory taken = `stamp` + a flag stamped on the badge, old colour holds then the new colour floods in; continent taken = celebrate 'big' (ding + stars) at its bonus badge + "+bonus"; player wiped out = `explosion` (neutral: `whoosh`) + chip shakes + "Out"; card drawn = `cardDeal` + "+1 card"; cards taken from a wiped-out player = `cardSlide`; your turn starts (reinforce, or your HQ pick) = `turn` + your chip flashes; illegal tap (the existing red toasts) = `error`; Start = `shuffle`; game over = celebrate 'win' (confetti in winner colours) or 'lose' for you; computers-only game shows the win. Others' moves play at 0.75 volume. `dieRoll` and `thud` are Risk's own `FX.define` sounds.
+- Animations off (Settings) also stops the old CSS dice tumble / badge pop / target pulse / marching arrow (`.fx-still` on `<html>`); Fast halves them (`.fx-fast`).
+- Tests: `tests/fx.test.js` (real fx.js + fake AudioContext + fake elements): scripted game sounds, one sound per die, chime only on your turn, win / lose / computers-only, Sound off = 0 plays, Animations off = 0 animations, no sounds on reload / new game. Failed before `fxrisk.js` existed; mutation-checked (no thuds, always-win, one sound per roll, chime every move, no reload guard all fail it).
+- Screenshots: scratchpad `design/risk-fx/` (settings, midgame, win at 393 px and laptop; states from `gen.js` there).
+
 ## NOT verified
+- Sounds by ear on a real iPhone (headless WebKit on Windows has no Web Audio; sound tested with a fake AudioContext only). Confetti in headless WebKit runs at a low frame rate, so screenshots show it early.
+- `tools/zoomcheck.mjs` after this change: its clicks time out on this busy laptop for both the old and new build (4-5 of 57 checks each run); zoom code was not touched.
 - Zoom on a real iPhone (pinch tested with synthetic touch pointers in WebKit) and Safari's laptop trackpad pinch (gesture events); no double-tap reset (it would clash with tapping territories).
 - Per-territory card symbols against a physical deck; fixed-value symbol pairing.
 - On a real iPhone (only WebKit at iPhone size, headless).

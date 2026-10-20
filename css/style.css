@@ -212,3 +212,13 @@ table.t td.r, table.t th.r { text-align: right; }
 .dot.on { background: var(--good); }
 .chart { width: 100%; height: 90px; display: block; }
 @media (prefers-reduced-motion: reduce) { #map .terr.tgt, #map .arrow, .die.roll, .sheet, #map .badge circle.pop { animation: none; } }
+/* sound & effects: Animations off = none; Fast = quicker */
+.fx-still #map .terr.tgt, .fx-still #map .arrow, .fx-still .die.roll, .fx-still .sheet, .fx-still #map .badge circle.pop { animation: none; }
+.fx-still #map .terr, .fx-still #map .badge circle.face { transition: none; }
+.fx-fast .die.roll, .fx-fast #map .badge circle.pop { animation-duration: .19s; }
+#map .fx-flood { pointer-events: none; fill-opacity: .82; }
+.fx-set .fx-row { border-top: 0; padding: 9px 0; }
+.fx-set .set-row:last-child { border-bottom: 0; }
+.fx-set .fx-lab label { flex: none; }
+.fx-set .switch input:checked + span { background: var(--accent); }
+.fx-set .seg button { font-size: 13.5px; padding: 6px 10px; min-height: 34px; }

@@ -78,6 +78,7 @@
   $('#sheet').addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSheet(); });
   let toastT = 0;
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2200); }
+  const bad = msg => { toast(msg); FX.play('error'); }; // an illegal tap: same message, plus a soft error sound
 
   const WHY = {
     win: 'Exact chance from the dice math (not a simulation): you keep rolling the most dice you can until you take it or are down to one army.',
@@ -110,6 +111,38 @@
   $('#zoomIn').addEventListener('click', () => view.zoomBy(1.6));
   $('#zoomOut').addEventListener('click', () => view.zoomBy(1 / 1.6));
   $('#fitBtn').addEventListener('click', () => view.fit());
+
+  // ------------------------------------------------------------ sounds & effects (js/fx.js + js/fxrisk.js)
+  const FX = window.FX, RFX = window.RiskFX;
+  FX.init({ game: 'risk', accent: '#6ea8fe' });
+  const fxCss = () => { const s = FX.settings, r = document.documentElement.classList; r.toggle('fx-still', !s.animations); r.toggle('fx-fast', s.animSpeed === 'fast'); };
+  FX.onChange(fxCss); fxCss();
+  let fxPrev = null; const fxTimers = new Set();
+  const onMap = el => { // a badge zoomed off the board gets no floating number
+    if (!el) return null;
+    const r = el.getBoundingClientRect(), m = $('#map').getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    return x >= m.left && x <= m.right && y >= m.top && y <= m.bottom ? el : null;
+  };
+  const fxEnv = {
+    FX,
+    at(ms, f) { const id = setTimeout(() => { fxTimers.delete(id); try { f(); } catch (e) { /* an effect never breaks the game */ } }, ms); fxTimers.add(id); },
+    badge: t => onMap(view.badges[t] && view.badges[t].c),
+    chip: p => (app.tab === 'play' ? document.querySelectorAll('#panel .players .pl')[p] || null : null),
+    cont: ci => onMap(view.contBadges[ci]),
+    panel: () => (app.tab === 'play' ? document.querySelector('#panel .phase .h') : null),
+    dice: () => (app.tab === 'play' ? document.querySelector('#panel .dice') : null),
+    flood: (t, hex, ms) => RFX.flood(view, t, hex, ms, FX),
+    stamp: (t, hex) => RFX.stamp(view, t, hex, FX),
+  };
+  // the seats played on this screen: online your own seat; here every person (computers-only game: none)
+  const fxMe = g => (app.net ? [app.net.mySeat] : g.players.map((p, i) => (p.kind === 'human' ? i : -1)).filter(i => i >= 0));
+  function fxStep() { // called on every draw: play whatever changed on the table since the last one
+    const g = app.game;
+    if (g === fxPrev) return;
+    if (fxPrev && g) { try { RFX.run(RFX.events(fxPrev, g, fxMe(g)), fxEnv); } catch (e) { /* never break a move */ } }
+    fxPrev = g;
+  }
+  function fxReset() { fxTimers.forEach(clearTimeout); fxTimers.clear(); fxPrev = app.game; } // a new or reloaded table: no sounds for it
 
   function mapUI() {
     const g = app.game, ui = { names: S.names };
@@ -184,7 +217,7 @@
       app.history.push(app.game);
       if (app.history.length > 1) app.history.shift();
       app.game = E.apply(app.game, action);
-    } catch (e) { toast(e.message); return false; }
+    } catch (e) { bad(e.message); return false; }
     store.set('risk.game', app.game);
     return true;
   }
@@ -234,25 +267,25 @@
     if (app.tab !== 'play') goTab('play');
     const me = g.turn;
     switch (g.phase) {
-      case 'claim': if (g.owner[t] < 0) { act({ type: 'claim', t }); afterAct(); } else toast(T[t].name + ' is taken'); return;
+      case 'claim': if (g.owner[t] < 0) { act({ type: 'claim', t }); afterAct(); } else bad(T[t].name + ' is taken'); return;
       case 'place': {
         if (g.owner[t] === me || (g.quota && g.owner[t] === g.neutral)) { act({ type: 'place', t }); afterAct(); }
-        else toast(g.quota ? 'Yours or a neutral one' : 'Place on your own land');
+        else bad(g.quota ? 'Yours or a neutral one' : 'Place on your own land');
         return;
       }
       case 'capital': if (g.owner[t] === me) { act({ type: 'capital', t }); afterAct(); } return;
       case 'reinforce': {
-        if (g.mustTrade) { toast('Trade a card set first'); return; }
-        if (g.owner[t] !== me) { toast('Place on your own land'); return; }
+        if (g.mustTrade) { bad('Trade a card set first'); return; }
+        if (g.owner[t] !== me) { bad('Place on your own land'); return; }
         const n = app.amount === 0 ? g.reserve : Math.min(app.amount, g.reserve);
         act({ type: 'place', t, n }); afterAct(); return;
       }
       case 'attack': {
-        if (g.owner[t] === me) { app.sel = g.armies[t] >= 2 ? t : -1; app.to = -1; if (g.armies[t] < 2) toast('Needs 2+ armies to attack'); render(); return; }
+        if (g.owner[t] === me) { app.sel = g.armies[t] >= 2 ? t : -1; app.to = -1; if (g.armies[t] < 2) bad('Needs 2+ armies to attack'); render(); return; }
         if (app.sel >= 0 && ADJ[app.sel].includes(t)) { app.to = t; render(); return; }
         // tap an enemy first: pick your strongest neighbour
         const from = ADJ[t].filter(u => g.owner[u] === me && g.armies[u] >= 2).sort((a, b) => g.armies[b] - g.armies[a])[0];
-        if (from !== undefined) { app.sel = from; app.to = t; render(); } else toast('No army next to ' + T[t].name);
+        if (from !== undefined) { app.sel = from; app.to = t; render(); } else bad('No army next to ' + T[t].name);
         return;
       }
       case 'fortify': {
@@ -364,13 +397,13 @@
   async function leaveRoom() {
     const R = window.RiskNet; app.net = null;
     app.game = store.get('risk.game', null); app.sel = -1; app.to = -1; app.cards = [];
-    render(); tick();
+    fxReset(); render(); tick();
     if (R) await R.leave();
   }
   function onNet(s) {
     if (!s || ['none', 'closed', 'left'].includes(s.status)) {
       if (app.net && s && s.status !== 'none') toast(s.status === 'closed' ? 'The room was closed' : 'You left the room');
-      if (app.net) { app.net = null; app.game = store.get('risk.game', null); render(); tick(); }
+      if (app.net) { app.net = null; app.game = store.get('risk.game', null); fxReset(); render(); tick(); }
       return;
     }
     // presence ticks arrive often; redraw only when something on screen changes (a redraw under a finger eats the tap)
@@ -381,6 +414,7 @@
     if (s.pub && (s.status === 'playing' || s.status === 'finished')) {
       const g = window.RiskGame.merge(s.pub, s.mine, s.mySeat);
       app.game = g; if (!prev) view.resetZoom();
+      if (!wasNet || !prev) fxReset(); // joining or coming back into a room: nothing to replay
       if (!wasNet || !prev || prev.ver !== g.ver) settleSelection(prev, g);
       if (app.net.sending && (!prev || prev.ver !== g.ver)) app.net.sending = false;
     } else app.game = null;
@@ -426,7 +460,7 @@
     app.game = E.newGame(seats, S.rules); view.resetZoom();
     app.sel = -1; app.to = -1; app.cards = []; app.lastHuman = -1; app.hint = null;
     store.set('risk.game', app.game);
-    render(); tick();
+    fxReset(); FX.play('shuffle'); render(); tick();
   }
 
   function phaseBox(g) {
@@ -749,9 +783,11 @@
       <div class="set-row"><label>Territory names</label>${sw('names', S.names, 'S')}</div>
       <div class="set-row"><label>How strong are the computers? ${why('strong')}</label></div>
     </div>
+    <div class="phase" style="margin-top:10px"><div class="head"><span class="h">Sound &amp; effects</span></div><div id="fxBox"></div></div>
     <div class="small muted" style="margin-top:10px">Risk ${VERSION}. Our own map drawing; rules from the Parker Brothers and Hasbro rulebooks.</div>`;
   }
   function bindSettings() {
+    const fb = $('#fxBox'); if (fb) FX.renderSettings(fb);
     document.querySelectorAll('[data-rule]').forEach(sg => sg.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => { S.rules[sg.dataset.rule] = b.dataset.v; saveSettings(); render(); })));
     document.querySelectorAll('#speedSeg [data-v]').forEach(b => b.addEventListener('click', () => { S.speed = b.dataset.v; saveSettings(); render(); }));
     document.querySelectorAll('[data-sw]').forEach(i => i.addEventListener('change', () => { if (i.dataset.obj === 'rules') S.rules[i.dataset.sw] = i.checked; else S[i.dataset.sw] = i.checked; saveSettings(); render(); }));
@@ -777,6 +813,7 @@
     const lg = $('#log'); if (lg) lg.scrollTop = lg.scrollHeight;
     if (app.game) view.update(drawState(app.game), mapUI());
     else view.update(blankState(), mapUI());
+    fxStep();
   }
   // while HQs are being picked, the map rings only the viewer's own (others are secret until all have chosen)
   function drawState(g) {

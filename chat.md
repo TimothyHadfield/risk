@@ -21,3 +21,9 @@
 - **Built:** viewBox zoom in mapview.js (auto fit, pinch, wheel, + / -, clamped pan, fit glide); + / - / fit buttons on phone and laptop; old 2.1x toggle removed; turned-phone board box fits the screen.
 - **Verified:** `tools/zoomcheck.mjs` (WebKit, 3 sizes, 57 checks): 28 failed on the old code, all pass now; `npm test` 29 pass + 1 skip; screenshots `scratchpad/design/risk-zoom/before|after`.
 - **Open:** real iPhone pinch, Safari trackpad pinch.
+
+## 2026-10-20 — sounds, celebrations and effects (builder agent)
+- **Asked:** Tim: "add opptional sounds you can add to the games that reflect what's happening in the game accurately as well as win celebrations, and other fun annimations to go along with everything. Just make sure everything is customizable in the settings so the user can play as preffered."
+- **Built:** shared `js/fx.js` (1.0.3, unchanged copy) + `js/fxrisk.js` (table diff -> sounds/effects, see progress.md map); Settings > Sound & effects; error sound on illegal taps; flag stamp + colour flood on conquest; continent sparkle; win/lose celebration.
+- **Verified:** `npm test` 34 pass + 1 skip (new `tests/fx.test.js` failed first, mutation-checked); phone-view WebKit 393 px + 1440 px of settings, mid-game roll, win (confetti), no console errors, no overflow; Chrome timing: blitz click handler +18 ms, worst frame gap no worse than before.
+- **Open:** sound on a real iPhone.
