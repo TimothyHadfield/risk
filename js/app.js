@@ -17,8 +17,15 @@
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
   };
   const DEF_SETTINGS = { speed: 'normal', names: false, mapOdds: true, rules: {}, seats: null, nPlayers: 3 };
-  const S = Object.assign({}, DEF_SETTINGS, store.get('risk.settings', {}));
-  S.rules = Object.assign({}, E.DEFAULT_RULES, S.rules || {});
+  const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  const savedS = store.get('risk.settings', {});
+  const S = Object.assign({}, DEF_SETTINGS, isObj(savedS) ? savedS : {});
+  S.rules = Object.assign({}, E.DEFAULT_RULES, isObj(S.rules) ? S.rules : {});
+  // a damaged save must never stop the page from opening
+  if (![2, 3, 4, 5, 6].includes(S.nPlayers)) S.nPlayers = 3;
+  if (!['slow', 'normal', 'fast'].includes(S.speed)) S.speed = 'normal';
+  if (!Array.isArray(S.seats) || S.seats.length !== 6 || !S.seats.every(s => isObj(s) && ['human', 'online', 'cpu'].includes(s.kind) && ['easy', 'medium', 'hard'].includes(s.level))) S.seats = null;
+  if (typeof S.netName !== 'string') S.netName = '';
   const saveSettings = () => store.set('risk.settings', S);
 
   // ------------------------------------------------------------ app state
@@ -29,7 +36,11 @@
     history: [],
     net: null, // online room snapshot while in a room
   };
-  if (app.game && (!app.game.v || !app.game.players)) app.game = null;
+  const okGame = g => isObj(g) && g.v === 1 && Array.isArray(g.players) && g.players.length >= 2 && g.players.every(isObj) &&
+    Array.isArray(g.owner) && g.owner.length === 42 && Array.isArray(g.armies) && g.armies.length === 42 && typeof g.phase === 'string' &&
+    Array.isArray(g.log) && Array.isArray(g.deck) && isObj(g.rules) && Number.isInteger(g.turn) && !!g.players[g.turn];
+  if (!okGame(app.game)) app.game = null;
+  if (!isObj(app.calc) || !Number.isFinite(app.calc.A) || !Array.isArray(app.calc.D) || !app.calc.D.length || !app.calc.D.every(Number.isFinite)) app.calc = { A: 10, D: [5] };
 
   // ------------------------------------------------------------ tabs
   const TABS = [
@@ -766,7 +777,9 @@
   $('#ver').textContent = VERSION;
   const h = location.hash.slice(1); if (TABS.some(t => t.id === h)) app.tab = h;
   history.replaceState({ tab: app.tab }, '', '#' + app.tab);
-  render();
+  try { render(); } catch (e) { // a saved game this version can't draw: start clean rather than a dead page
+    app.game = null; store.del('risk.game'); render(); toast('Saved game could not be opened');
+  }
   if (app.game) { app.lastHuman = isHumanTurn() ? app.game.turn : -1; tick(); }
   // online: hook up once the module has loaded, and go back into a room after a reload
   function hookNet() {
