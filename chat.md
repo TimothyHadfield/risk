@@ -27,3 +27,9 @@
 - **Built:** shared `js/fx.js` (1.0.3, unchanged copy) + `js/fxrisk.js` (table diff -> sounds/effects, see progress.md map); Settings > Sound & effects; error sound on illegal taps; flag stamp + colour flood on conquest; continent sparkle; win/lose celebration.
 - **Verified:** `npm test` 34 pass + 1 skip (new `tests/fx.test.js` failed first, mutation-checked); phone-view WebKit 393 px + 1440 px of settings, mid-game roll, win (confetti), no console errors, no overflow; Chrome timing: blitz click handler +18 ms, worst frame gap no worse than before.
 - **Open:** sound on a real iPhone.
+
+## 2026-10-20 — real-table look (builder agent)
+- **Asked:** Tim: make every game look "almost identical to how the board or card layout looks like in real life ... like you're looking through a camera that is connected to a user's glasses" (full words in progress.md). Manager: keep the real world map and auto-fit zoom.
+- **Built:** wood table with opponents across, printed continent-coloured framed board, your hand fan / army tray / deck / discard pile at the near edge, paper Risk cards with territory shapes, real red/ivory dice, physical card motion (deal + flip, trade onto pile); shared `_table` kit copied in; fx.js re-copied.
+- **Verified:** `node --test "tests/*.test.*"` 34 pass + 1 skip (incl. online); WebKit shots of 5 states at 393x659, 320x568, 659x393, 1280x800: no overflow, no page scroll, no console errors; Roll click shows red + ivory dice with animations, no errors; Effects speed and Computer speed change independently; two reviewer rounds, fixes applied; zoomcheck laptop flake same as before (4-5 click timeouts).
+- **Open:** real iPhone look; printed bonus legend / trade track not built.

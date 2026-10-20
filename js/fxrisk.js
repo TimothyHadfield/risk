@@ -91,6 +91,7 @@
     for (const e of evs) {
       switch (e.type) {
         case 'trade':
+          if (env.cards) at(T, () => env.cards('trade', e.p, e.n * 3));
           snd(T, 'cardSlide', e); snd(T + 160, 'cardFlip', e);
           if (e.armies > 0) fl(T + 200, () => (e.mine ? env.panel() : env.chip(e.p)), '+' + e.armies, 'var(--accent-warm)');
           T += 260; break;
@@ -111,6 +112,7 @@
             for (let i = 0; i < n; i++) snd(T + 120 + i * 85, 'dieRoll', e);
             land = T + 120 + n * 85 + 60;
           }
+          if (env.roll) at(T, () => env.roll(land - T)); // the real dice tumble and land as the sound settles
           snd(land, 'diceLand', e);
           if (e.from >= 0 && e.al) fl(land + 20, () => env.badge(e.from), '−' + e.al, 'var(--bad)');
           if (e.to >= 0 && e.dl) fl(land + 20, () => env.badge(e.to), '−' + e.dl, 'var(--bad)');
@@ -132,8 +134,10 @@
           at(T, () => FX.shake(env.chip(e.p))); if (!e.neutral) fl(T + 60, () => env.chip(e.p), 'Out', 'var(--bad)');
           T += 450; break;
         case 'draw':
+          if (env.cards) at(T, () => env.cards('draw', e.p, e.n));
           snd(T, 'cardDeal', e); fl(T, () => env.chip(e.p), '+1 card', 'var(--accent)'); T += 200; break;
         case 'loot':
+          if (env.cards) at(T, () => env.cards('loot', e.p, e.n));
           snd(T, 'cardSlide', e); fl(T, () => env.chip(e.p), '+' + e.n + ' cards', 'var(--accent)'); T += 260; break;
         case 'over':
           at(T + 250, () => FX.celebrate({ kind: e.kind, colors: [e.hex, '#ffffff', '#f0b354', '#e8eaf0'] })); T += 250; break;
@@ -148,13 +152,14 @@
   // ---------------------------------------------------------------- map effects (browser only)
   const animOn = FX => !!(FX && FX.settings.animations && root.document);
   const speed = FX => (FX.settings.animSpeed === 'fast' ? 0.55 : 1);
-  // the territory keeps its old colour for `ms`, then the conqueror's colour floods in
+  // the armies on the territory keep the old colour for `ms`, then the conqueror's colour floods in
+  // (the board itself is printed in continent colours, like the real one: owners show by their pieces)
   function flood(view, t, color, ms, FX) {
     if (!animOn(FX)) return;
-    const p = view.paths[t]; if (!p || !p.animate) return;
+    const b = view.badges[t], p = b && b.c; if (!p || !p.animate) return;
     const o = p.cloneNode(false);
-    o.removeAttribute('data-t'); o.setAttribute('class', 'terr fx-flood'); o.style.fill = color;
-    view.land.parentNode.insertBefore(o, view.land.nextSibling); // just above the land, outside its shadow filter (cheaper to draw)
+    o.removeAttribute('filter'); o.setAttribute('class', 'face fx-flood'); o.style.fill = color;
+    p.parentNode.insertBefore(o, p.nextSibling); // over the piece, under its shine and number
     const fade = 520 * speed(FX), dur = ms + fade;
     let a; try { a = o.animate([{ opacity: 1 }, { opacity: 1, offset: ms / dur }, { opacity: 0 }], { duration: dur, easing: 'ease-in', fill: 'forwards' }); } catch (e) { o.remove(); return; }
     const done = () => o.remove(); a.onfinish = done; a.oncancel = done; setTimeout(done, dur + 200);

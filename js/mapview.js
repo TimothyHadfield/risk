@@ -9,6 +9,9 @@
 
   // where each continent's bonus badge sits
   const CONT_LABEL = { na: [70, 250], sa: [330, 470], eu: [600, 30], af: [430, 470], as: [896, 268], au: [968, 380] };
+  // the printed board: each continent in its own colour (like the real board); owners show by their armies
+  const BOARD = { na: '#e0b648', sa: '#d4683f', eu: '#5d87c2', af: '#b77b47', as: '#7ea558', au: '#9a6cae' };
+  const EDGE = { na: '#8a6a17', sa: '#7d3219', eu: '#2b4a78', af: '#6a421f', as: '#3f5e26', au: '#573a66' };
 
   function MapView(svg, onTap) {
     this.svg = svg; this.onTap = onTap;
@@ -16,9 +19,11 @@
     svg.innerHTML = '';
     const defs = el('defs', {}, svg);
     defs.innerHTML = `
-      <radialGradient id="sea" gradientUnits="userSpaceOnUse" cx="500" cy="252" r="750" gradientTransform="translate(0 110.9) scale(1 .56)"><stop offset="0" stop-color="#16213a"/><stop offset="1" stop-color="#0d1322"/></radialGradient>
-      <pattern id="waves" width="28" height="14" patternUnits="userSpaceOnUse"><path d="M0 10 Q7 6 14 10 T28 10" fill="none" stroke="#1d2a47" stroke-width="1"/></pattern>
-      <filter id="lift" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000" flood-opacity=".55"/></filter>`;
+      <radialGradient id="sea" gradientUnits="userSpaceOnUse" cx="500" cy="252" r="750" gradientTransform="translate(0 110.9) scale(1 .56)"><stop offset="0" stop-color="#b9d5dc"/><stop offset=".7" stop-color="#a3c4cf"/><stop offset="1" stop-color="#8fb2c0"/></radialGradient>
+      <pattern id="waves" width="28" height="14" patternUnits="userSpaceOnUse"><path d="M0 10 Q7 6 14 10 T28 10" fill="none" stroke="#7fa3b2" stroke-width=".8"/></pattern>
+      <filter id="lift" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#2b3d48" flood-opacity=".35"/></filter>
+      <radialGradient id="shine" cx=".36" cy=".3" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".62"/><stop offset=".45" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>
+      <filter id="piece" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx=".6" dy="1.8" stdDeviation="1.3" flood-color="#000" flood-opacity=".55"/></filter>`;
     // the sea runs past the frame so a laptop's taller map box shows ocean, not a gap
     el('rect', { x: -1500, y: -400, width: 4000, height: 1360, fill: 'url(#sea)' }, svg);
     el('rect', { x: -1500, y: -400, width: 4000, height: 1360, fill: 'url(#waves)', opacity: .7 }, svg);
@@ -45,7 +50,7 @@
     });
     // coasts: each territory's outline in its continent's colour; the dark inner borders then cover the shared edges
     const coast = el('g', { class: 'coast' }, svg);
-    G.terr.forEach((t, i) => el('path', { d: t.d, stroke: M.CONTINENTS[M.T[i].ci].color }, coast));
+    G.terr.forEach((t, i) => el('path', { d: t.d, stroke: EDGE[M.CONTINENTS[M.T[i].ci].id] }, coast));
     const inner = el('g', { class: 'inner' }, svg);
     if (G.inner) el('path', { d: G.inner }, inner);
     // continent bonus badges
@@ -54,8 +59,9 @@
       const [x, y] = G.cont ? G.cont[ci] : CONT_LABEL[c.id];
       const g = el('g', { transform: `translate(${x},${y})` }, cl);
       const s = el('g', { class: 'sc' }, g);
-      el('rect', { x: -16, y: -11, width: 32, height: 22, rx: 6, fill: '#0f1117', stroke: c.color, 'stroke-width': 1.5 }, s);
-      const tx = el('text', { y: 5, fill: c.color }, s); tx.textContent = '+' + c.bonus;
+      // printed on the board: a cream label edged in the continent's colour
+      el('rect', { x: -16, y: -11, width: 32, height: 22, rx: 3, fill: '#f4ecd6', stroke: BOARD[c.id], 'stroke-width': 2.2 }, s);
+      const tx = el('text', { y: 5, fill: EDGE[c.id] }, s); tx.textContent = '+' + c.bonus;
       return g;
     });
     // selection ring + odds labels + army badges
@@ -65,8 +71,10 @@
       // a bigger invisible tap area, never past halfway to the next badge
       const near = Math.min(...G.terr.map((u, j) => (j === i ? 1e9 : Math.hypot(u.x - t.x, u.y - t.y))));
       el('circle', { r: Math.min(24, near / 2).toFixed(1), class: 'hit' }, g);
+      // the armies standing on it: a plastic piece in the owner's colour with the count on top
       const s = el('g', { class: 'sc' }, g);
-      const c = el('circle', { r: 12.5, class: 'face' }, s);
+      const c = el('circle', { r: 12.5, class: 'face', filter: 'url(#piece)' }, s);
+      el('circle', { r: 12.5, class: 'shine', fill: 'url(#shine)' }, s);
       const tx = el('text', { y: 4.6 }, s);
       return { g, c, tx, star: null };
     });
@@ -186,7 +194,7 @@
     for (let i = 0; i < M.N; i++) {
       const o = st.owner[i], path = this.paths[i], b = this.badges[i];
       const col = o >= 0 ? P[o].hex : '#3a4152';
-      path.style.fill = ui.heat ? ui.heat[i] : col;
+      path.style.fill = ui.heat ? ui.heat[i] : BOARD[M.CONTINENTS[M.T[i].ci].id];
       path.classList.toggle('sel', ui.sel === i);
       path.classList.toggle('tgt', !!(ui.targets && ui.targets.has(i)));
       path.classList.toggle('dim', !!(ui.targets && ui.sel !== undefined && ui.sel !== null && ui.sel >= 0 && ui.sel !== i && !ui.targets.has(i)));
@@ -219,5 +227,6 @@
     this.svg.classList.toggle('ingame', P.length > 0); // owners' colours now carry the map; continent outlines step back
   };
 
+  MapView.BOARD = BOARD; MapView.EDGE = EDGE;
   root.MapView = MapView;
 })(window);

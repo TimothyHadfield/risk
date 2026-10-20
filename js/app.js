@@ -127,13 +127,49 @@
     FX,
     at(ms, f) { const id = setTimeout(() => { fxTimers.delete(id); try { f(); } catch (e) { /* an effect never breaks the game */ } }, ms); fxTimers.add(id); },
     badge: t => onMap(view.badges[t] && view.badges[t].c),
-    chip: p => (app.tab === 'play' ? document.querySelectorAll('#panel .players .pl')[p] || null : null),
+    chip: p => seatEl(p),
     cont: ci => onMap(view.contBadges[ci]),
     panel: () => (app.tab === 'play' ? document.querySelector('#panel .phase .h') : null),
     dice: () => (app.tab === 'play' ? document.querySelector('#panel .dice') : null),
     flood: (t, hex, ms) => RFX.flood(view, t, hex, ms, FX),
     stamp: (t, hex) => RFX.stamp(view, t, hex, FX),
+    // the drawn dice tumble on the table and land on their numbers
+    roll: ms => { if (app.tab === 'play') document.querySelectorAll('#panel .dice .tbl-die').forEach((d, i) => TABLE.roll(d, +d.dataset.v, { duration: ms, seed: Date.now() + i * 97 })); },
+    cards: (kind, p, n) => cardMotion(kind, p, n),
   };
+  // a player's place at the table: their seat across the board, or your own place at the bottom
+  function seatEl(p) {
+    if (app.tab !== 'play') return null;
+    return document.querySelector(`#seats .opp[data-p="${p}"]`) || (p === mineFor ? document.querySelector('#mine .me') : null);
+  }
+  // an invisible card-sized spot (fixed) at the centre of an element, so a flying card starts / lands card-sized
+  function spotAt(el, w) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect(), h = w * 88 / 63, s = document.createElement('div');
+    s.style.cssText = `position:fixed;left:${r.left + r.width / 2 - w / 2}px;top:${r.top + r.height / 2 - h / 2}px;width:${w}px;height:${h}px;visibility:hidden;pointer-events:none`;
+    document.body.appendChild(s); setTimeout(() => s.remove(), 1500);
+    return s;
+  }
+  const cardW = () => (matchMedia('(min-width: 900px)').matches ? 76 : 46);
+  // physical card motion: drawn from the deck (yours turns face up in your hand), traded sets go onto the discard pile
+  function cardMotion(kind, p, n) {
+    if (app.tab !== 'play' || !TABLE.animOn()) return;
+    const deck = $('#deck'), pile = $('#discard'), hand = $('#hand'), mine = p === mineFor && hand;
+    const seat = mine ? hand : document.querySelector(`#seats .opp[data-p="${p}"] .backs`);
+    if (kind === 'draw' && deck && seat) {
+      const cards = mine ? hand.querySelectorAll('.rk-card') : [], last = cards[cards.length - 1];
+      if (last) last.style.visibility = 'hidden';
+      TABLE.deal(deck, mine ? (last || spotAt(hand, cardW())) : seat, { duration: 420 }).then(() => {
+        if (!last) return; last.style.visibility = ''; last.classList.remove('rk-turn'); void last.offsetWidth; last.classList.add('rk-turn');
+      });
+    } else if (kind === 'trade' && pile && seat) {
+      const ids = (app.game.discard || []).slice(-n);
+      ids.forEach((cid, i) => setTimeout(() => {
+        const from = spotAt(seat, mine ? cardW() : cardW() * 0.6);
+        TABLE.deal(from, pile, { face: riskCard(cid, { cls: 'ghost' }), duration: 380 });
+      }, i * 90));
+    }
+  }
   // the seats played on this screen: online your own seat; here every person (computers-only game: none)
   const fxMe = g => (app.net ? [app.net.mySeat] : g.players.map((p, i) => (p.kind === 'human' ? i : -1)).filter(i => i >= 0));
   function fxStep() { // called on every draw: play whatever changed on the table since the last one
@@ -148,7 +184,7 @@
     const g = app.game, ui = { names: S.names };
     if (app.tab === 'odds' || !g) { if (!g) ui.names = true; return ui; }
     const me = g.turn, human = isHumanTurn();
-    if (app.tab === 'study' && app.lens !== 'owner') { ui.heat = lensColors(); return ui; }
+    if (app.tab === 'study') { ui.heat = lensColors(); return ui; }
     if (!human) { if (g.lastRoll) ui.arrow = [g.lastRoll.from, g.lastRoll.to]; return ui; }
     ui.sel = app.sel;
     if (g.phase === 'attack' && app.sel >= 0) {
@@ -174,7 +210,9 @@
     const g = app.game, out = [];
     const me = viewer();
     for (let t = 0; t < 42; t++) {
-      if (app.lens === 'cont') out.push(CONTINENTS[T[t].ci].color);
+      // the board is printed in continent colours; the Owner lens paints each territory in its owner's colour
+      if (app.lens === 'owner') out.push(g.owner[t] >= 0 ? g.players[g.owner[t]].hex : '#cfc6b0');
+      else if (app.lens === 'cont') out.push(CONTINENTS[T[t].ci].color);
       else if (app.lens === 'threat') {
         if (g.owner[t] !== me) { out.push('#2a3042'); continue; }
         const th = AI.threat(g, t), mine = g.armies[t];
@@ -304,10 +342,38 @@
     W: '<path d="M17 3l4 9 9 1-7 6 2 9-8-5-8 5 2-9-7-6 9-1z" fill="currentColor"/>',
   };
   const SYM_NAME = { I: 'Infantry', C: 'Cavalry', A: 'Artillery', W: 'Wild' };
-  function cardHTML(cid, on, own) {
-    const c = CARDS[cid];
-    return `<button class="card${on ? ' on' : ''}${own ? ' own' : ''}" data-card="${cid}" aria-pressed="${on}"><span>${c.terr >= 0 ? esc(T[c.terr].name) : 'Wild'}</span><svg viewBox="0 0 34 30">${SYM_SVG[c.sym]}</svg><span class="muted" style="color:#5b6170">${SYM_NAME[c.sym]}</span></button>`;
+  // a territory card laid out like the real ones: name at the top, the territory's shape, the troop symbol below
+  const shapeBox = []; // territory -> viewBox around its outline (measured once from the drawn map)
+  function shapeVB(t) {
+    if (!shapeBox[t]) {
+      let b = null; try { b = view.paths[t].getBBox(); } catch (e) { /* not drawn yet */ }
+      if (!b || !b.width) return '0 0 10 10';
+      const pad = Math.max(b.width, b.height) * 0.06;
+      shapeBox[t] = [b.x - pad, b.y - pad, b.width + 2 * pad, b.height + 2 * pad].map(v => +v.toFixed(1)).join(' ');
+    }
+    return shapeBox[t];
   }
+  function riskCard(cid, o) {
+    o = o || {};
+    const c = CARDS[cid], cls = `tbl-card tbl-poker rk-card${o.on ? ' is-up' : ''}${o.own ? ' own' : ''}${o.cls ? ' ' + o.cls : ''}`;
+    if (c.terr < 0) {
+      return `<div class="${cls} wild" data-card="${cid}" role="button" aria-pressed="${!!o.on}" aria-label="Wild card"><span class="rk-nm">Wild</span><span class="rk-syms">${['I', 'C', 'A'].map(s => `<svg viewBox="0 0 34 30">${SYM_SVG[s]}</svg>`).join('')}</span><span class="rk-lab">Wild</span></div>`;
+    }
+    const ci = T[c.terr].ci, id = CONTINENTS[ci].id;
+    const nm = T[c.terr].name, long = nm.length > 9 || nm.split(' ').some(w => w.length > 7);
+    return `<div class="${cls}" data-card="${cid}" role="button" aria-pressed="${!!o.on}" aria-label="${esc(nm)}, ${SYM_NAME[c.sym]}"><span class="rk-nm${long ? ' long' : ''}">${esc(nm)}</span>` +
+      `<svg class="rk-shape" viewBox="${shapeVB(c.terr)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="${window.RiskGeo.terr[c.terr].d}" fill="${window.MapView.BOARD[id]}" stroke="${window.MapView.EDGE[id]}" vector-effect="non-scaling-stroke"/></svg>` +
+      `<svg class="rk-sym" viewBox="0 0 34 30" aria-hidden="true">${SYM_SVG[c.sym]}</svg></div>`;
+  }
+  const BACK = 'diamonds'; // the printed back of every Risk card
+  // a plastic army piece (infantry 1, cavalry 5, artillery 10) in a player's colour
+  const piece = (sym, hex) => `<svg class="rk-piece" viewBox="0 0 34 30" style="color:${hex}" aria-hidden="true">${SYM_SVG[sym]}</svg>`;
+  function trayHTML(n, hex) { // unplaced armies laid in front of you, broken into real pieces
+    const bits = []; let a = n;
+    [[10, 'A'], [5, 'C'], [1, 'I']].forEach(([v, s]) => { let k = Math.floor(a / v); a -= k * v; while (k-- > 0 && bits.length < 6) bits.push(piece(s, hex)); });
+    return `<div class="tray" aria-label="${n} armies to place">${bits.join('')}<b class="num">${n}</b></div>`;
+  }
+  const pipHTML = v => TABLE.PIPS[v].map(c => `<i style="grid-area:${Math.ceil(c / 3)}/${(c - 1) % 3 + 1}"></i>`).join('');
   function dieFace(k) { // small drawn die showing k pips
     const P = { 1: [[9, 9]], 2: [[5, 5], [13, 13]], 3: [[4.5, 4.5], [9, 9], [13.5, 13.5]] }[k];
     return `<svg viewBox="0 0 18 18" width="20" height="20" aria-hidden="true"><rect x="1" y="1" width="16" height="16" rx="4" fill="#e5534b"/>${P.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.7" fill="#fff"/>`).join('')}</svg>`;
@@ -315,20 +381,67 @@
   function diceHTML(r) {
     if (!r) return '';
     const n = Math.min(r.att.length, r.def.length);
-    const a = r.att.map((v, i) => `<span class="die a roll${i < n && v <= r.def[i] ? ' lost' : ''}">${v}</span>`).join('');
-    const d = r.def.map((v, i) => `<span class="die d roll${i < n && r.att[i] > v ? ' lost' : ''}">${v}</span>`).join('');
+    // red attack dice against ivory defence dice, as on the real table
+    const a = r.att.map((v, i) => `<span class="tbl-die red${i < n && v <= r.def[i] ? ' lost' : ''}" data-v="${v}" aria-label="Attack ${v}">${pipHTML(v)}</span>`).join('');
+    const d = r.def.map((v, i) => `<span class="tbl-die${i < n && r.att[i] > v ? ' lost' : ''}" data-v="${v}" aria-label="Defence ${v}">${pipHTML(v)}</span>`).join('');
     return `<div class="dice">${a}<span class="vs">vs</span>${d}<span class="small muted" style="margin-left:6px">−${r.al} / −${r.dl}</span></div>`;
   }
 
   // ------------------------------------------------------------ PLAY panel
-  function playersStrip(g) {
-    return `<div class="players">${g.players.map((p, i) => {
-      if (p.kind === 'neutral') return `<div class="pl" style="--pc:${p.hex}"><div class="nm"><i></i>Neutral</div><div class="st">${E.countOwned(g, i)} land</div></div>`;
-      const arm = g.armies.reduce((a, n, t) => a + (g.owner[t] === i ? n : 0), 0);
-      const nc = Array.isArray(p.cards) ? p.cards.length : p.cards;
-      return `<div class="pl${g.turn === i && g.phase !== 'over' ? ' turn' : ''}${p.out ? ' out' : ''}" style="--pc:${p.hex}"><div class="nm"><i></i>${esc(p.name)}</div><div class="st">${E.countOwned(g, i)}▲ ${arm}⚑ ${nc}▭</div></div>`;
-    }).join('')}</div>`;
+  // ------------------------------------------------------------ the table round the board
+  // Other players sit across the board (name plate, the backs of their cards, their land and armies);
+  // you sit at the bottom edge (your hand fanned, your unplaced armies, the deck and the discard pile).
+  let mineFor = -1, seatsKey = '', mineKey = '', fanApi = null;
+  const nCards = p => (Array.isArray(p.cards) ? p.cards.length : (p.cards | 0));
+  const armiesOf = (g, i) => g.armies.reduce((a, n, t) => a + (g.owner[t] === i ? n : 0), 0);
+  function renderTable() {
+    const g = app.game, show = app.tab === 'play' && !!g;
+    $('#seats').hidden = !show; $('#mine').hidden = !show;
+    document.body.classList.toggle('at-table', show);
+    if (!show) { seatsKey = mineKey = ''; mineFor = -1; return; }
+    const v = viewer(); mineFor = v;
+    // seats across the table
+    const others = g.players.map((p, i) => i).filter(i => i !== v);
+    const sk = JSON.stringify([v, g.turn, g.phase === 'over', others.map(i => { const p = g.players[i]; return [p.name, p.out, nCards(p), E.countOwned(g, i), armiesOf(g, i)]; })]);
+    if (sk !== seatsKey) {
+      seatsKey = sk;
+      $('#seats').innerHTML = others.map(i => {
+        const p = g.players[i], turn = g.turn === i && g.phase !== 'over';
+        if (p.kind === 'neutral') return `<div class="opp neutral" data-p="${i}" style="--pc:${p.hex}"><div class="tbl-plate"><i></i>Neutral</div><div class="seat-row"><span class="st num">${E.countOwned(g, i)}▲ ${armiesOf(g, i)}⚑</span></div></div>`;
+        const k = nCards(p), backs = Array.from({ length: Math.min(k, 5) }, () => TABLE.back({ pattern: BACK })).join('');
+        return `<div class="opp${turn ? ' turn' : ''}${p.out ? ' out' : ''}" data-p="${i}" style="--pc:${p.hex}"><div class="tbl-plate"><i></i><span class="nm">${esc(p.name)}</span></div>` +
+          `<div class="seat-row"><span class="backs" aria-label="${k} cards">${backs}${k ? `<b class="num">${k}</b>` : ''}</span><span class="st num">${E.countOwned(g, i)}▲ ${armiesOf(g, i)}⚑</span></div></div>`;
+      }).join('');
+    }
+    // your place: plate, unplaced armies, hand, deck, discard pile
+    const P = v >= 0 ? g.players[v] : null, hand = P && Array.isArray(P.cards) ? P.cards : [];
+    const myTurn = v >= 0 && isHumanTurn() && g.turn === v;
+    const pick = myTurn && g.phase === 'reinforce';
+    const toPlace = !P || !myTurn ? 0 : g.phase === 'reinforce' ? g.reserve : SETUP.includes(g.phase) ? (P.pool | 0) : 0;
+    const deckN = Array.isArray(g.deck) ? g.deck.length : (g.deck | 0), disc = (g.discard || []).slice(-5);
+    const sel = app.cards.filter(c => hand.includes(c));
+    const mk = JSON.stringify([v, hand, sel, pick, toPlace, deckN, disc, g.discard ? g.discard.length : 0, P && [P.name, P.hex, E.countOwned(g, v), armiesOf(g, v)], myTurn, g.phase === 'over']);
+    if (mk === mineKey) return;
+    mineKey = mk;
+    const me = P ? `<div class="me${myTurn && g.phase !== 'over' ? ' turn' : ''}" style="--pc:${P.hex}"><div class="tbl-plate"><i></i><span class="nm">${esc(P.name)}</span></div>${toPlace ? trayHTML(toPlace, P.hex) : `<span class="st num">${E.countOwned(g, v)}▲ ${armiesOf(g, v)}⚑</span>`}</div>` : '<div class="me"></div>';
+    $('#mine').innerHTML = `${me}<div class="hand${pick ? ' pick' : ''}" id="hand"></div><div class="decks"><div id="deck" aria-label="Deck, ${deckN} cards"></div><div id="discard" aria-label="Traded cards"></div></div>`;
+    TABLE.deck($('#deck'), deckN, { pattern: BACK, perCard: 0.3, max: 10 });
+    // every card keeps its own small tilt by its place in the whole pile, so the pile never reshuffles on screen
+    const all = g.discard || [];
+    TABLE.pile($('#discard'), all.map((c, i) => (i >= all.length - 5 ? riskCard(c) : '')), { seed: 'risk-discard', max: 5, rot: 10, off: 3 });
+    // the hand last, once the deck and pile have their size, so the fan gets its real width
+    if (fanApi && fanApi.disconnect) fanApi.disconnect();
+    fanApi = TABLE.fan($('#hand'), hand.map(c => riskCard(c, { on: sel.includes(c), own: CARDS[c].terr >= 0 && g.owner[CARDS[c].terr] === v })), { pick: false, spread: 0.66, lift: 12, maxRot: 10, arc: 0.8 });
   }
+  // tap a card in your hand to pick it for a set (only while you are placing armies)
+  $('#mine').addEventListener('click', e => {
+    const c = e.target.closest('#hand [data-card]'); if (!c) return;
+    const g = app.game;
+    if (!g || g.phase !== 'reinforce' || !isHumanTurn() || g.turn !== mineFor) { bad('Trade cards at the start of your turn'); return; }
+    const id = +c.dataset.card, i = app.cards.indexOf(id);
+    if (i >= 0) app.cards.splice(i, 1); else { app.cards.push(id); if (app.cards.length > 3) app.cards.shift(); }
+    render();
+  });
 
   function newGamePanel() {
     const n = S.nPlayers;
@@ -502,8 +615,7 @@
         return `<div class="phase">${head(g.mustTrade ? 'Trade cards first' : `Place <span class="num">${g.reserve}</span>`, why('place'))}
           ${g.after ? '<div class="small muted">Extra armies from the cards you took. Then keep attacking.</div>' : `<div class="small muted">${inc.terr} for land${inc.conts.length ? ' + ' + inc.conts.map(c => CONTINENTS.find(x => x.id === c).name + ' ' + CONTINENTS.find(x => x.id === c).bonus).join(' + ') : ''}. Tap your land.</div>`}
           <div class="row" style="margin-top:8px"><div class="seg grow" id="amtSeg">${[[1, '1'], [3, '3'], [0, 'All']].map(([k, l]) => `<button aria-pressed="${app.amount === k}" data-amt="${k}">${l}</button>`).join('')}</div><button class="btn sm" id="hintBtn">Hint</button></div>
-          ${hand.length ? `<div class="row" style="margin:10px 0 6px"><span class="cap grow">Cards · next set ${E.setValue(g, okSet ? sel.map(c => CARDS[c].sym) : ['I', 'C', 'A'])}${why('cards')}</span>${sets.length ? `<button class="btn sm ${okSet ? 'warm' : ''}" id="tradeBtn">${okSet ? 'Trade +' + val : 'Pick a set'}</button>` : ''}</div>
-          <div class="hand">${hand.map(c => cardHTML(c, sel.includes(c), CARDS[c].terr >= 0 && g.owner[CARDS[c].terr] === me)).join('')}</div>` : ''}
+          ${hand.length ? `<div class="row" style="margin-top:10px"><span class="cap grow">Cards · next set ${E.setValue(g, okSet ? sel.map(c => CARDS[c].sym) : ['I', 'C', 'A'])}${why('cards')}</span>${sets.length ? `<button class="btn sm ${okSet ? 'warm' : ''}" id="tradeBtn">${okSet ? 'Trade +' + val : 'Pick a set'}</button>` : ''}</div>` : ''}
         </div>`;
       }
       case 'attack': {
@@ -517,9 +629,9 @@
             <div class="row" style="margin-top:10px"><div class="seg" id="diceSeg" style="flex:0 0 120px">${[1, 2, 3].map(k => `<button aria-pressed="${app.dice === k}" data-dice="${k}" aria-label="${k} ${k === 1 ? 'die' : 'dice'}" ${k > maxD ? 'disabled' : ''}>${dieFace(k)}</button>`).join('')}</div>
             <button class="btn primary grow" id="rollBtn">Roll</button><button class="btn warm" id="blitzBtn">Blitz</button></div>`;
         }
-        return `<div class="phase">${head('Attack', '<button class="btn sm" id="hintBtn">Hint</button>')}${body}
-          ${g.lastRoll ? `<div style="margin-top:8px">${diceHTML(g.lastRoll)}</div>` : ''}
-          <div class="row" style="margin-top:10px"><button class="btn block" id="endAtk">Done attacking</button></div></div>`;
+        // "Done attacking" sits up by the title so it stays in sight above your hand on a phone
+        return `<div class="phase">${head('Attack', '<button class="btn sm" id="hintBtn">Hint</button><button class="btn sm" id="endAtk">Done attacking</button>')}${body}
+          ${g.lastRoll ? `<div style="margin-top:8px">${diceHTML(g.lastRoll)}</div>` : ''}</div>`;
       }
       case 'occupy': {
         const o = g.occupy; if (app.moveN < o.min || app.moveN > o.max) app.moveN = o.max;
@@ -562,7 +674,7 @@
     if (!g) return newGamePanel();
     const logH = g.log.slice(-6).map(l => `<div>${esc(l)}</div>`).join('');
     const netLine = app.net ? `<span class="small muted">Room ${esc(app.net.code)}${app.net.hostAway ? ' · host away' : ''}</span>` : '';
-    return playersStrip(g) + phaseBox(g) + secretLine(g) +
+    return phaseBox(g) + secretLine(g) +
       `<div class="log" id="log">${logH}</div>` +
       (g.phase !== 'over' ? `<div class="row" style="margin-top:8px"><button class="btn sm ghost" id="quitBtn">${app.net ? 'Leave' : 'New game'}</button><span class="grow"></span>${netLine}<span class="small muted">Round ${g.round}</span></div>` : '');
   }
@@ -589,11 +701,6 @@
       afterAct();
     }));
     document.querySelectorAll('#amtSeg [data-amt]').forEach(b => b.addEventListener('click', () => { app.amount = +b.dataset.amt; render(); }));
-    document.querySelectorAll('[data-card]').forEach(b => b.addEventListener('click', () => {
-      const c = +b.dataset.card; const i = app.cards.indexOf(c);
-      if (i >= 0) app.cards.splice(i, 1); else { app.cards.push(c); if (app.cards.length > 3) app.cards.shift(); }
-      render();
-    }));
     on('tradeBtn', () => {
       const P = g.players[g.turn];
       let sel = app.cards.filter(c => P.cards.includes(c));
@@ -811,6 +918,7 @@
     else { panel.innerHTML = settingsPanel(); bindSettings(); }
     panel.scrollTop = keep;
     const lg = $('#log'); if (lg) lg.scrollTop = lg.scrollHeight;
+    renderTable();
     if (app.game) view.update(drawState(app.game), mapUI());
     else view.update(blankState(), mapUI());
     fxStep();
