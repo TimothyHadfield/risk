@@ -10,3 +10,8 @@
 - **Asked:** Tim: "once you're finished with all the games, review them again for design improvements especially visually."
 - **Built:** phone map legibility + tap areas, laptop board fills height, settings switch/toggle fixes, drawn dice picker, log fade, turn chip tint (see progress.md "Design pass").
 - **Verified:** 28 tests pass; before/after phone-view screenshots of 10 states at 393px and 1440px, plus 1280x720 and phone zoom; no console errors, no horizontal overflow.
+
+## 2026-10-20 — real maps (builder agent)
+- **Asked:** Tim: "the map of the US in TTR looks nothing like the US. Fix this and any other similar problems accross the games". Manager added: redraw the card Cavalry icon as horse and rider and Artillery as a cannon on wheels; make coasts read clearly.
+- **Built:** `tools/buildgeo.mjs` draws the board from Natural Earth coastlines (Miller projection, Europe gently enlarged, big lakes cut out), countries assigned to the 42 territories with cut lines like the classic board; invisible sea tap areas per territory; grey non-game land; new card icons.
+- **Verified:** 30 tests (new map tests failed on the old map, pass on the new); tap-area sampling at 393px: smallest 330 px² (Irkutsk) vs 291 before (Iceland), Iceland 291 -> 813; one read-only reviewer named the world and found nothing major; screenshots `scratchpad/design/risk-maps/before|after`.

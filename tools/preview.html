@@ -1,13 +1,17 @@
-<!doctype html><meta charset=utf-8><body style="margin:0;background:#0f1117">
+<!doctype html><meta charset="utf-8"><body style="background:#0d1322;margin:0">
 <svg id=s viewBox="0 0 1000 560" style="width:100%"></svg>
 <script src="../js/map.js"></script><script src="../js/geo.js"></script>
 <script>
-const s=document.getElementById('s');let h='';
+// quick look at the generated board: territories by continent, borders, sea links, tap areas, badge spots
+let h='';
 const M=RiskMap,G=RiskGeo;
-G.links.forEach(([a,b])=>{const A=G.terr[a],B=G.terr[b];h+=`<line x1=${A.x} y1=${A.y} x2=${B.x} y2=${B.y} stroke="#556" stroke-dasharray="4 4"/>`});
+G.terr.forEach(t=>{h+=`<path d="${t.hit}" fill="#fff" fill-opacity=.05 stroke="#fff" stroke-opacity=.15 stroke-width=.4 />`});
+G.links.forEach(([a,b])=>{const A=G.terr[a],B=G.terr[b];if(Math.abs(A.x-B.x)<500)h+=`<line x1=${A.x} y1=${A.y} x2=${B.x} y2=${B.y} stroke="#889" stroke-dasharray="4 4"/>`});
+h+=`<path d="${G.bg}" fill="#2a3040"/>`;
 G.terr.forEach((t,i)=>{const c=M.CONTINENTS[M.T[i].ci].color;h+=`<path d="${t.d}" fill="${c}" fill-opacity=.5 stroke="${c}" stroke-width=.6 />`});
-G.terr.forEach(t=>{h+=`<path d="${t.b}" stroke="#0f1117" stroke-width=1.5 />`});
-G.coasts.forEach(c=>{h+=`<path d="${c.d}" fill=none stroke="#ccd" stroke-width=1.2 />`});
-G.terr.forEach((t,i)=>{h+=`<text x=${t.x} y=${t.y} font-size=9 fill="#fff" text-anchor=middle>${M.T[i].name}</text>`});
+h+=`<path d="${G.inner}" stroke="#0f1117" stroke-width=1.2 fill=none />`;
+G.terr.forEach((t,i)=>{h+=`<circle cx=${t.x} cy=${t.y} r=2 fill="#fff"/><text x=${t.x} y=${t.y-4} font-size=7 fill="#fff" text-anchor=middle>${M.T[i].name}</text>`});
+G.cont.forEach((p,i)=>{h+=`<text x=${p[0]} y=${p[1]} font-size=12 fill="${M.CONTINENTS[i].color}" text-anchor=middle>+${M.CONTINENTS[i].bonus}</text>`});
 s.innerHTML=h;
+const vb=new URLSearchParams(location.search).get("vb"); if(vb) s.setAttribute("viewBox",vb.replace(/,/g," "));
 </script>

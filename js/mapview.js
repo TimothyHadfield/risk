@@ -32,23 +32,26 @@
         el('line', { x1: e.x, y1: e.y, x2: 1000, y2: e.y - 6 }, links);
       } else el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y }, links);
     });
-    // land
+    // invisible tap areas round each territory (sea near small islands counts); land drawn on top wins
+    const hits = el('g', { class: 'hits' }, svg);
+    G.terr.forEach((t, i) => { if (t.hit) el('path', { d: t.hit, class: 'hit', 'data-t': i }, hits); });
+    // land that is not part of the game (New Zealand, the Philippines...)
+    if (G.bg) el('path', { d: G.bg, class: 'bgland' }, svg);
+    // land (real coastlines, Natural Earth, public domain)
     this.land = el('g', { class: 'land', filter: 'url(#lift)' }, svg);
     this.paths = G.terr.map((t, i) => {
       const p = el('path', { d: t.d, class: 'terr', 'data-t': i }, this.land);
       return p;
     });
-    const inner = el('g', { class: 'inner' }, svg);
-    G.terr.forEach(t => { if (t.b) el('path', { d: t.b }, inner); });
+    // coasts: each territory's outline in its continent's colour; the dark inner borders then cover the shared edges
     const coast = el('g', { class: 'coast' }, svg);
-    G.coasts.forEach(c => {
-      const ci = { na: 0, greenland: 0, sa: 1, iceland: 2, gb: 2, eu: 2, af: 3, madagascar: 3, as: 4, japan: 4, indonesia: 5, newguinea: 5, au: 5 }[c.land];
-      el('path', { d: c.d, stroke: M.CONTINENTS[ci].color }, coast);
-    });
+    G.terr.forEach((t, i) => el('path', { d: t.d, stroke: M.CONTINENTS[M.T[i].ci].color }, coast));
+    const inner = el('g', { class: 'inner' }, svg);
+    if (G.inner) el('path', { d: G.inner }, inner);
     // continent bonus badges
     const cl = el('g', { class: 'contlab' }, svg);
-    this.contBadges = M.CONTINENTS.map(c => {
-      const [x, y] = CONT_LABEL[c.id];
+    this.contBadges = M.CONTINENTS.map((c, ci) => {
+      const [x, y] = G.cont ? G.cont[ci] : CONT_LABEL[c.id];
       const g = el('g', { transform: `translate(${x},${y})` }, cl);
       const s = el('g', { class: 'sc' }, g);
       el('rect', { x: -16, y: -11, width: 32, height: 22, rx: 6, fill: '#0f1117', stroke: c.color, 'stroke-width': 1.5 }, s);

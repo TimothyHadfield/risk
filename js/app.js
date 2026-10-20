@@ -266,8 +266,8 @@
   // ------------------------------------------------------------ art
   const SYM_SVG = {
     I: '<circle cx="17" cy="7" r="4.2" fill="currentColor"/><path d="M10 28V18c0-4 3-6 7-6s7 2 7 6v10h-4v-8h-1v8h-4v-8h-1v8z" fill="currentColor"/><path d="M26 4v18" stroke="currentColor" stroke-width="1.8"/>',
-    C: '<path d="M6 27c1-6 4-9 7-10l-3-6 4-2 3 4c3-4 8-5 11-2 2 2 1 5-1 5h-4l1 11h-3l-2-8-5 2-2 6z" fill="currentColor"/>',
-    A: '<circle cx="11" cy="22" r="5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 19 30 10l1.5 3-16 9z" fill="currentColor"/><path d="M4 27h20" stroke="currentColor" stroke-width="2"/>',
+    C: '<path d="M7 15C9 13.2 17 13 20.5 13.5L24.5 7.5 25.5 5.4 26.8 7C28.5 8 30.5 9.5 31.8 11L31 12.8C29.5 12.8 28 12.5 27 12C26 13.5 25.2 15.5 25 17C24.8 19 24.3 20.3 23.5 21L24.5 28H22.5L21.5 22.5 20.5 22.5 20 28H18L18.5 21.8H12L11 28H9L9.5 21.5 8.6 21 7 28H5L6.4 19C5.6 18 6 16 7 15Z" fill="currentColor"/><path d="M7.5 15.5C4.5 16 3 19 2.5 24H4.2C4.7 20.5 5.8 18.5 8 17.3Z" fill="currentColor"/><circle cx="15.4" cy="3.4" r="2.4" fill="currentColor"/><path d="M12.9 6.5h4.8l.8 7.2-5.8.2z" fill="currentColor"/><path d="M17 8.2l5.6 2.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>', // horse and rider
+    A: '<path d="M4.5 19.5 28.6 8.6l1.9 4.1L7.3 25.2z" fill="currentColor"/><rect x="28" y="7.2" width="3" height="6.6" rx="1" transform="rotate(-24 29.5 10.5)" fill="currentColor"/><path d="M13 23 3 28.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="15" cy="22.5" r="6" fill="#f3efe4" stroke="currentColor" stroke-width="2.2"/><path d="M15 16.5v12M9 22.5h12M10.8 18.3l8.4 8.4M19.2 18.3l-8.4 8.4" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="22.5" r="1.8" fill="currentColor"/>', // cannon on a wheel
     W: '<path d="M17 3l4 9 9 1-7 6 2 9-8-5-8 5 2-9-7-6 9-1z" fill="currentColor"/>',
   };
   const SYM_NAME = { I: 'Infantry', C: 'Cavalry', A: 'Artillery', W: 'Wild' };

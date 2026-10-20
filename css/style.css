@@ -71,9 +71,11 @@ main { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 #map .terr.dim { opacity: .45; }
 #map .terr.tgt { fill-opacity: 1; animation: tgt 1.4s ease-in-out infinite; }
 @keyframes tgt { 50% { fill-opacity: .6; } }
-#map .inner path { stroke: rgba(10,12,18,.75); stroke-width: 1.3; fill: none; pointer-events: none; }
-#map .coast path { fill: none; stroke-width: 1.6; stroke-opacity: .9; pointer-events: none; transition: stroke-opacity .3s; }
-#map.ingame .coast path { stroke-opacity: .4; }
+#map .inner path { stroke: rgb(16,19,28); stroke-width: 1.7; fill: none; pointer-events: none; stroke-linejoin: round; }
+#map .coast path { fill: none; stroke-width: 1.3; stroke-opacity: .9; pointer-events: none; transition: stroke-opacity .3s; stroke-linejoin: round; }
+#map .hits path { fill: transparent; stroke: none; pointer-events: all; cursor: pointer; }
+#map .bgland { fill: #323a4d; stroke: #4a5469; stroke-width: .8; pointer-events: none; }
+#map.ingame .coast path { stroke-opacity: .7; }
 #map .contlab text { font: 700 13px system-ui, sans-serif; text-anchor: middle; }
 #map .contlab { pointer-events: none; }
 #map .badge { cursor: pointer; }
