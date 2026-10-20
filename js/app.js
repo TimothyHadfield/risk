@@ -155,13 +155,18 @@
   function isHumanTurn() {
     const g = app.game; if (!g || g.phase === 'over') return false;
     if (app.net) return !!app.net.myTurn && g.turn === app.net.mySeat;
-    return g.players[g.turn].kind === 'human';
+    return g.players[g.turn].kind === 'human' && !autoNow(g);
   }
+  const SETUP = ['claim', 'place', 'capital'];
+  // a person who tapped "Finish setup for me": the computer plays their setup turns
+  const autoNow = g => SETUP.includes(g.phase) && (g.players[g.turn].kind === 'cpu' || (g.autoSetup || []).includes(g.turn));
+  const hardFor = (g, p) => g.players[p].kind === 'cpu' ? g : Object.assign({}, g, { players: g.players.map((q, i) => (i === p ? Object.assign({}, q, { level: 'hard' }) : q)) });
   function viewer() { // whose secrets the screen may show
     const g = app.game; if (!g) return -1;
     if (app.net) return app.net.mySeat;
     if (isHumanTurn()) return g.turn;
     if (app.lastHuman >= 0) return app.lastHuman;
+    if (humans() > 1) return -1; // after a reload: show nobody's secrets until someone takes the phone
     return g.players.findIndex(p => p.kind === 'human');
   }
   const humans = () => app.game.players.filter(p => p.kind === 'human').length;
@@ -198,11 +203,11 @@
     clearTimeout(tickT);
     const g = app.game; if (!g || g.phase === 'over' || app.net) return; // online: the host runs the computers
     const P = g.players[g.turn];
-    if (P.kind === 'cpu') {
+    if (P.kind === 'cpu' || autoNow(g)) {
       const d = ['claim', 'place'].includes(g.phase) ? Math.min(60, DELAY[S.speed]) : DELAY[S.speed];
       tickT = setTimeout(() => {
         if (!app.game || app.game !== g) return;
-        const a = AI.choose(g, g.turn);
+        const a = AI.choose(hardFor(g, g.turn), g.turn);
         if (!a || !act(a)) return;
         render(); tick();
       }, d);
@@ -350,6 +355,7 @@
     if (!netReady() || app.netBusy) return;
     const code = ($('#netCode').value || '').trim().toUpperCase();
     if (code.length < 4) { toast('Type the room code'); return; }
+    if (!/^[A-Z0-9]+$/.test(code)) { toast('No room with that code.'); return; } // codes are letters and digits only
     app.netBusy = true; render();
     const r = await window.RiskNet.joinRoom(code, netName());
     app.netBusy = false;
@@ -540,11 +546,11 @@
     if (!app.net) on('quitBtn', () => openSheet(`<div class="h">Start over?</div><div class="muted" style="margin:6px 0 12px">This game ends.</div><button class="btn warm block" id="quitYes">End game</button>`, s => s.querySelector('#quitYes').addEventListener('click', () => { closeSheet(); clearTimeout(tickT); app.game = null; store.del('risk.game'); render(); })));
     document.querySelectorAll('[data-auto]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.auto === 'one') { act(AI.choose(app.game, app.game.turn)); afterAct(); return; }
+      // only this person's setup: the Hard computer picks for them; other people still pick their own
       const me = app.game.turn;
-      app.game.players[me].kind = 'cpu'; app.game.players[me].level = 'hard';
+      app.game = Object.assign({}, app.game, { autoSetup: (app.game.autoSetup || []).concat(me) });
       let guard = 0;
-      while (['claim', 'place', 'capital'].includes(app.game.phase) && guard++ < 2000) act(AI.choose(app.game, app.game.turn));
-      app.game.players[me].kind = 'human';
+      while (autoNow(app.game) && guard++ < 2000) act(AI.choose(hardFor(app.game, app.game.turn), app.game.turn));
       store.set('risk.game', app.game);
       afterAct();
     }));
@@ -616,20 +622,25 @@
   function runForecast() {
     const g0 = app.game; if (!g0 || g0.phase === 'over' || fc.running || app.net) return; // online: the deck order is secret
     const key = g0.ver + ':' + g0.turn; fc.running = true; fc.wins = g0.players.map(() => 0); fc.n = 0; fc.of = 40; fc.key = key;
-    const one = () => {
-      let st = JSON.parse(JSON.stringify(g0));
+    // one move at a time in short slices, so taps stay instant even when a 6-player game runs long
+    let st = null, k = 0;
+    const fresh = () => {
+      st = JSON.parse(JSON.stringify(g0)); k = 0;
       st.seed = (Math.random() * 4294967296) >>> 0;
       for (let i = st.deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [st.deck[i], st.deck[j]] = [st.deck[j], st.deck[i]]; }
       st.players.forEach(p => { if (p.kind === 'human' || p.kind === 'online') { p.kind = 'cpu'; p.level = 'hard'; } });
+      delete st.autoSetup;
       st.rules.maxTurns = Math.ceil(st.turns / Math.max(1, E.active(st).length)) + 120;
-      let k = 0; while (st.phase !== 'over' && k++ < 30000) st = E.apply(st, AI.choose(st, st.turn));
-      if (st.winner >= 0) fc.wins[st.winner]++;
-      fc.n++;
+    };
+    const stepOne = () => {
+      if (!st) fresh();
+      st = E.apply(st, AI.choose(st, st.turn));
+      if (st.phase === 'over' || ++k >= 30000) { if (st.winner >= 0) fc.wins[st.winner]++; fc.n++; st = null; }
     };
     const chunk = () => {
       if (!app.game || (app.game.ver + ':' + app.game.turn) !== key) { fc.running = false; return; }
-      const t0 = performance.now(); while (fc.n < fc.of && performance.now() - t0 < 120) one();
-      if (app.tab === 'study') render();
+      const t0 = performance.now(), n0 = fc.n; while (fc.n < fc.of && performance.now() - t0 < 30) stepOne();
+      if (app.tab === 'study' && fc.n !== n0) render();
       if (fc.n < fc.of) setTimeout(chunk, 0); else { fc.running = false; if (app.tab === 'study') render(); }
     };
     setTimeout(chunk, 0);
@@ -647,7 +658,7 @@
     const b0 = O.battle(c.A, c.D[0]);
     const need = [0.5, 0.75, 0.9].map(p => [p, O.needed(c.D[0], p)]);
     // win chance vs attacking stack, for the first defender
-    const pts = []; for (let A = 2; A <= 40; A++) pts.push([A, O.battle(A, c.D[0]).win]);
+    const pts = []; for (let A = 2; A <= 40; A++) pts.push([A, O.winP(A, c.D[0])]);
     const W = 300, H = 80, X = A => 8 + (A - 2) / 38 * (W - 16), Y = p => H - 6 - p * (H - 14);
     const poly = pts.map(([A, p]) => `${X(A).toFixed(1)},${Y(p).toFixed(1)}`).join(' ');
     const g = app.game;
@@ -663,7 +674,7 @@
       ${c.D.length > 1 ? `<div class="small" style="margin-top:6px">${ch.atLeast.slice(1).map((p, i) => `<span class="pill" style="background:${scale(p)};margin:2px 4px 2px 0">${i + 1}: ${pct(p)}</span>`).join('')}</div>` : ''}
       <div class="sep"></div>
       <div class="cap">Win chance by stack size vs ${c.D[0]}</div>
-      <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="8" x2="${W - 8}" y1="${Y(0.5)}" y2="${Y(0.5)}" stroke="#2a3042" stroke-dasharray="3 3"/><polyline points="${poly}" fill="none" stroke="#6ea8fe" stroke-width="2"/><circle cx="${X(Math.min(40, c.A))}" cy="${Y(O.battle(Math.min(40, c.A), c.D[0]).win)}" r="3.5" fill="#f0b354"/></svg>
+      <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="8" x2="${W - 8}" y1="${Y(0.5)}" y2="${Y(0.5)}" stroke="#2a3042" stroke-dasharray="3 3"/><polyline points="${poly}" fill="none" stroke="#6ea8fe" stroke-width="2"/><circle cx="${X(Math.min(40, c.A))}" cy="${Y(O.winP(Math.min(40, c.A), c.D[0]))}" r="3.5" fill="#f0b354"/></svg>
       <div class="row small muted" style="justify-content:space-between"><span>2</span><span>stack</span><span>40</span></div>
       <div class="small" style="margin-top:6px">Stack needed: ${need.map(([p, n]) => `<b>${n}</b> for ${p * 100}%`).join(' · ')}</div>
     </div>
@@ -764,8 +775,14 @@
     else { panel.innerHTML = settingsPanel(); bindSettings(); }
     panel.scrollTop = keep;
     const lg = $('#log'); if (lg) lg.scrollTop = lg.scrollHeight;
-    if (app.game) view.update(app.game, mapUI());
+    if (app.game) view.update(drawState(app.game), mapUI());
     else view.update(blankState(), mapUI());
+  }
+  // while HQs are being picked, the map rings only the viewer's own (others are secret until all have chosen)
+  function drawState(g) {
+    if (g.phase !== 'capital') return g;
+    const v = viewer();
+    return Object.assign({}, g, { players: g.players.map((p, i) => (i === v ? p : Object.assign({}, p, { capital: -1 }))) });
   }
   let blank = null;
   function blankState() {
@@ -780,7 +797,8 @@
   try { render(); } catch (e) { // a saved game this version can't draw: start clean rather than a dead page
     app.game = null; store.del('risk.game'); render(); toast('Saved game could not be opened');
   }
-  if (app.game) { app.lastHuman = isHumanTurn() ? app.game.turn : -1; tick(); }
+  // several people on one phone: after a reload, cover the screen before the next person's turn
+  if (app.game) { app.lastHuman = humans() > 1 ? -2 : isHumanTurn() ? app.game.turn : -1; tick(); }
   // online: hook up once the module has loaded, and go back into a room after a reload
   function hookNet() {
     const R = window.RiskNet; if (!R || hookNet.done) return; hookNet.done = true;

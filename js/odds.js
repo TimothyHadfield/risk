@@ -120,8 +120,11 @@
 
   // smallest attacking stack with at least `target` chance to win
   function needed(D, target, opts) {
-    for (let A = 2; A < 400; A++) if (battle(A, D, opts).win >= target) return A;
-    return Infinity;
+    const win = opts ? (A => battle(A, D, opts).win) : (A => winP(A, D)); // winP: same numbers, cached table
+    if (win(399) < target) return Infinity;
+    let lo = 2, hi = 399; // the chance only grows with the stack, so halve the range
+    while (lo < hi) { const m = (lo + hi) >> 1; if (win(m) >= target) hi = m; else lo = m + 1; }
+    return lo;
   }
 
   const api = { rollTable, battle, chain, needed, attDice, defDice, winP, lossP };

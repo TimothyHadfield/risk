@@ -43,6 +43,11 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - Seat choice "Online friend" in the New game panel; Start becomes "Make room"; Join by code below it.
 - Pass-the-phone cover screen between people sharing one phone.
 
+## QA pass (fresh agent, live site, 2026-10-20) and fixes
+- Fixed + rechecked headless: other players' HQ rings showed during HQ picks (now hidden until all chose); "Finish setup for me" also did other people's setup (now only yours); reload removed the pass-the-phone cover (now covers after a reload); Forecast froze the page up to 7.5 s (now one move per 30 ms slice: worst pause 0.73 s, 6 players, ~90 s total); "stack needed" took 11 s at 200 armies (binary search on the cached table, same answers); bad room code like "A/B/" showed a database error; damaged localStorage crashed the page.
+- Held up: rapid double/triple taps, taps during computer turns, reload in every phase, Back with sheets, 2p neutral limit, zoom taps, 163-game random-move engine fuzz.
+- Still slow (low): the Odds chain with ~200-army stacks takes ~1 s per tap.
+
 ## NOT verified
 - Per-territory card symbols against a physical deck; fixed-value symbol pairing.
 - On a real iPhone (only WebKit at iPhone size, headless).
