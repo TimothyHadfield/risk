@@ -1,0 +1,7 @@
+# Risk — chat log
+
+## 2026-10-19 — first build (builder agent, phase 2 brief)
+- **Asked:** Tim: "add risk, clue, battleship, connect four, stratego, clue, checkers, pandemic, splendor, king of tokyo, 7 wonders, and evolution to the list of games." Manager brief: exact classic Risk with all variants, own SVG map, exact odds layer, measured computers, online/computer seats, rules-check and ideas docs.
+- **Built:** map data + generated SVG map, dice Markov-chain odds, pure rules engine, three computer levels with a measured strength table, Play/Odds/Study/Settings tabs, online rooms via the shared `_online` module.
+- **Verified:** 28 node tests (mutation-checked: card table, occupy minimum, tie rule x2, income floor, secrecy, out-of-turn); full games played by taps in headless WebKit at iPhone size and laptop width; two headless iPhones playing online against the real Firebase project with a mid-game reload.
+- **Open:** see progress.md NOT verified.

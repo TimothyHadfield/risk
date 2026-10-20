@@ -1,0 +1,13 @@
+<!doctype html><meta charset=utf-8><body style="margin:0;background:#0f1117">
+<svg id=s viewBox="0 0 1000 560" style="width:100%"></svg>
+<script src="../js/map.js"></script><script src="../js/geo.js"></script>
+<script>
+const s=document.getElementById('s');let h='';
+const M=RiskMap,G=RiskGeo;
+G.links.forEach(([a,b])=>{const A=G.terr[a],B=G.terr[b];h+=`<line x1=${A.x} y1=${A.y} x2=${B.x} y2=${B.y} stroke="#556" stroke-dasharray="4 4"/>`});
+G.terr.forEach((t,i)=>{const c=M.CONTINENTS[M.T[i].ci].color;h+=`<path d="${t.d}" fill="${c}" fill-opacity=.5 stroke="${c}" stroke-width=.6 />`});
+G.terr.forEach(t=>{h+=`<path d="${t.b}" stroke="#0f1117" stroke-width=1.5 />`});
+G.coasts.forEach(c=>{h+=`<path d="${c.d}" fill=none stroke="#ccd" stroke-width=1.2 />`});
+G.terr.forEach((t,i)=>{h+=`<text x=${t.x} y=${t.y} font-size=9 fill="#fff" text-anchor=middle>${M.T[i].name}</text>`});
+s.innerHTML=h;
+</script>
