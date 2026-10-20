@@ -16,11 +16,12 @@
     svg.innerHTML = '';
     const defs = el('defs', {}, svg);
     defs.innerHTML = `
-      <radialGradient id="sea" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#16213a"/><stop offset="1" stop-color="#0d1322"/></radialGradient>
+      <radialGradient id="sea" gradientUnits="userSpaceOnUse" cx="500" cy="252" r="750" gradientTransform="translate(0 110.9) scale(1 .56)"><stop offset="0" stop-color="#16213a"/><stop offset="1" stop-color="#0d1322"/></radialGradient>
       <pattern id="waves" width="28" height="14" patternUnits="userSpaceOnUse"><path d="M0 10 Q7 6 14 10 T28 10" fill="none" stroke="#1d2a47" stroke-width="1"/></pattern>
       <filter id="lift" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000" flood-opacity=".55"/></filter>`;
-    el('rect', { x: 0, y: 0, width: 1000, height: 560, fill: 'url(#sea)' }, svg);
-    el('rect', { x: 0, y: 0, width: 1000, height: 560, fill: 'url(#waves)', opacity: .7 }, svg);
+    // the sea runs past the frame so a laptop's taller map box shows ocean, not a gap
+    el('rect', { x: -500, y: -400, width: 2000, height: 1360, fill: 'url(#sea)' }, svg);
+    el('rect', { x: -500, y: -400, width: 2000, height: 1360, fill: 'url(#waves)', opacity: .7 }, svg);
     // sea lanes / land links
     const links = el('g', { class: 'links' }, svg);
     G.links.forEach(([a, b]) => {
@@ -49,21 +50,34 @@
     this.contBadges = M.CONTINENTS.map(c => {
       const [x, y] = CONT_LABEL[c.id];
       const g = el('g', { transform: `translate(${x},${y})` }, cl);
-      el('rect', { x: -16, y: -11, width: 32, height: 22, rx: 6, fill: '#0f1117', stroke: c.color, 'stroke-width': 1.5 }, g);
-      const tx = el('text', { y: 5, fill: c.color }, g); tx.textContent = '+' + c.bonus;
+      const s = el('g', { class: 'sc' }, g);
+      el('rect', { x: -16, y: -11, width: 32, height: 22, rx: 6, fill: '#0f1117', stroke: c.color, 'stroke-width': 1.5 }, s);
+      const tx = el('text', { y: 5, fill: c.color }, s); tx.textContent = '+' + c.bonus;
       return g;
     });
     // selection ring + odds labels + army badges
     this.marks = el('g', { class: 'marks' }, svg);
     this.badges = G.terr.map((t, i) => {
       const g = el('g', { class: 'badge', transform: `translate(${t.x},${t.y})`, 'data-t': i }, svg);
-      el('circle', { r: 12.5 }, g);
-      const tx = el('text', { y: 4.6 }, g);
-      return { g, c: g.firstChild, tx, star: null };
+      // a bigger invisible tap area, never past halfway to the next badge
+      const near = Math.min(...G.terr.map((u, j) => (j === i ? 1e9 : Math.hypot(u.x - t.x, u.y - t.y))));
+      el('circle', { r: Math.min(24, near / 2).toFixed(1), class: 'hit' }, g);
+      const s = el('g', { class: 'sc' }, g);
+      const c = el('circle', { r: 12.5, class: 'face' }, s);
+      const tx = el('text', { y: 4.6 }, s);
+      return { g, c, tx, star: null };
     });
     this.names = el('g', { class: 'names' }, svg);
     G.terr.forEach((t, i) => { const tx = el('text', { x: t.x, y: t.y + 24 }, this.names); tx.textContent = M.T[i].name; });
     this.tags = el('g', { class: 'tags' }, svg);
+    // phone: the board is drawn at ~0.4x, so numbers and labels get a size boost
+    const mq = root.matchMedia ? root.matchMedia('(max-width: 899px)') : null;
+    const setScale = () => {
+      this.k = mq && mq.matches ? 1.36 : 1;
+      svg.querySelectorAll('.sc').forEach(s => { if (this.k === 1) s.removeAttribute('transform'); else s.setAttribute('transform', `scale(${this.k})`); });
+    };
+    setScale();
+    if (mq) { if (mq.addEventListener) mq.addEventListener('change', setScale); else if (mq.addListener) mq.addListener(setScale); }
     const hit = e => { const t = e.target.closest('[data-t]'); if (t) this.onTap(+t.getAttribute('data-t')); };
     svg.addEventListener('click', hit);
   }
@@ -93,7 +107,8 @@
     // odds tags over targets
     this.tags.innerHTML = '';
     if (ui.tags) ui.tags.forEach((txt, t) => {
-      const g = el('g', { transform: `translate(${G.terr[t].x},${G.terr[t].y - 22})`, class: 'tag' }, this.tags);
+      const k = this.k || 1;
+      const g = el('g', { transform: `translate(${G.terr[t].x},${G.terr[t].y - 22 * k})${k === 1 ? '' : ` scale(${k})`}`, class: 'tag' }, this.tags);
       el('rect', { x: -20, y: -10, width: 40, height: 18, rx: 5, fill: txt.bg || '#0f1117' }, g);
       const tx = el('text', { y: 4 }, g); tx.textContent = txt.text;
     });
@@ -103,6 +118,7 @@
       if (Math.abs(A.x - B.x) < 500) el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, class: 'arrow' }, this.marks);
     }
     this.svg.classList.toggle('show-names', !!ui.names);
+    this.svg.classList.toggle('ingame', P.length > 0); // owners' colours now carry the map; continent outlines step back
   };
 
   root.MapView = MapView;

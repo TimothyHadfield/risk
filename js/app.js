@@ -440,7 +440,7 @@
     }
     if (!human) {
       return `<div class="phase"><div class="head"><span class="h" style="color:${P.hex}">${esc(P.name)}</span><span class="small muted">${phaseName(g)}</span></div>
-        ${g.lastRoll ? diceHTML(g.lastRoll) : '<div class="small muted">Thinking…</div>'}</div>`;
+        ${g.lastRoll ? `<div class="row small" style="margin-bottom:6px"><b>${esc(T[g.lastRoll.from].name)}</b><span class="muted">→</span><b>${esc(T[g.lastRoll.to].name)}</b></div>${diceHTML(g.lastRoll)}` : '<div class="small muted">Thinking…</div>'}</div>`;
     }
     const head = (title, extra) => `<div class="head"><span class="h">${title}</span>${extra || ''}</div>`;
     switch (g.phase) {
@@ -480,7 +480,7 @@
           body = `<div class="row small" style="margin-bottom:6px"><b>${esc(T[app.sel].name)}</b><span class="muted">${A} →</span><b>${esc(T[app.to].name)}</b><span class="muted">${D}</span></div>
             <div class="odds"><span class="small muted">Win${why('win')}</span><div class="row"><div class="meter grow"><i style="width:${b.win * 100}%;background:${scale(b.win)}"></i></div><b class="num" style="color:${scale(b.win)}">${pct(b.win)}</b></div>
             <span class="small muted">You lose${why('loss')}</span><span class="small num">~${b.expAttLoss.toFixed(1)} armies, they lose ~${b.expDefLoss.toFixed(1)}</span></div>
-            <div class="row" style="margin-top:10px"><div class="seg" id="diceSeg" style="flex:0 0 120px">${[1, 2, 3].map(k => `<button aria-pressed="${app.dice === k}" data-dice="${k}" ${k > maxD ? 'disabled' : ''}>${k}🎲</button>`).join('')}</div>
+            <div class="row" style="margin-top:10px"><div class="seg" id="diceSeg" style="flex:0 0 120px">${[1, 2, 3].map(k => `<button aria-pressed="${app.dice === k}" data-dice="${k}" aria-label="${k} ${k === 1 ? 'die' : 'dice'}" ${k > maxD ? 'disabled' : ''}>${dieFace(k)}</button>`).join('')}</div>
             <button class="btn primary grow" id="rollBtn">Roll</button><button class="btn warm" id="blitzBtn">Blitz</button></div>`;
         }
         return `<div class="phase">${head('Attack', '<button class="btn sm" id="hintBtn">Hint</button>')}${body}
