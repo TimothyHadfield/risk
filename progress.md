@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-20 (real-table look).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-20 (edge pass).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.
@@ -25,6 +25,7 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - "the map of the US in TTR looks nothing like the US. Fix this and any other similar problems accross the games" (2026-10-20): maps must read as the real place (real coastlines, lakes, islands).
 - "some games have maps and whatnot you can zoom in and out of often. Make it so that there is only an auto zoom that automatically fits the whole board in sight and then you can zoom if you want with easily reseting back to auto mode." (2026-10-20; same behaviour in TTR, Risk, Pandemic, Carcassonne)
 - "add opptional sounds you can add to the games that reflect what's happening in the game accurately as well as win celebrations, and other fun annimations to go along with everything. Just make sure everything is customizable in the settings so the user can play as preffered." (2026-10-20)
+- "Could you focus on making each game perfect especially in scenarios that the game doesn't expect or are a little weird." (2026-10-20)
 - "could you also make sure that each of the games also have a look to them so that the game (either board or card layout) looks almost identical to how the board or card layout looks like in real life, so it's easy to understand if you've already played it before, and also so it feels more like you're actually playing in real life rather than you're playing it online. Even things like how youre cards or other things are laid out infront of you, make it look like they are actual cards laid out similar to how it looks like in real life. Make the decks look like actual decks. Make the board have the same design as it does in real life with the same layouts. It should look kind of like you're looking through a camera that is connected to a user's glasses that is playing in real life (not actually, but the layout and style of everything should be similar)." (2026-10-20)
 - From the briefs: exact classic board, 44-card deck, starting armies by player count, escalating and fixed card values, capital and secret-mission variants, own SVG map; exact battle odds, chain odds, expected losses, continent value; computers at measured strength; seats can be you, computer or online in any mix. $0, no copyrighted art or rulebook text.
 
@@ -90,7 +91,18 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - Real-game notes: scratchpad `table/risk/real.md`; before/after shots: scratchpad `table/risk/before|after` (`gen.js` states, `shoot.mjs` = 4 sizes + overflow/scroll/error check). Two reviewer rounds done.
 - Kept on purpose after review: numbered army tokens (real figures unreadable at phone size), dark helper panel, app tabs; not built: printed bonus legend / card-trade track on the board, opponents' army piles.
 
+## Edge pass (2026-10-20)
+48 odd scenarios tested (scratchpad `edge/risk/`: `scenarios.md`, `edge-engine.js` rules checks, `edge-ui.mjs` WebKit checks at 320x568 / 393x659 / 659x393 / 640x400 / 1280x800 / 1920x1080, `gen-states.js` saved games). 13 failed, all fixed:
+- Rule: after a wipe-out you trade only down to 4 cards; a 4-card hand with a set could trade again (engine + AI + no Trade button). Dice must be 1-3 whole numbers.
+- End screen says how: "Conquered the world." / "Mission: <winner's mission>." / "Took the headquarters." / "Turn limit: most land." (engine `st.how`; old saves show nothing). Turn-limit log no longer says "You holds".
+- Study Threat lens crashed during claiming (AI.threat on unclaimed land). Odds tab: tapping unclaimed land set defender 0 (now 1). Hint while a trade is due says "Trade a card set first". HQ pick on someone else's land says "Pick one of your own".
+- Two people on one phone: no "Pass the phone" cover between setup armies unless missions are dealt (nothing secret then).
+- Same game in two tabs: the other tab follows each move (`storage` event; new games get `gid`).
+- Crowded seats (5 opponents, many cards or big army totals): rows ran into each other; `fitSeats()` now shows one card back + count, then smaller print.
+Held up: all-computer table, reload in every phase, storage blocked, damaged saves, Back with sheets, 9-card hand, empty deck, long/emoji/blank/duplicate names, double taps (no double moves).
+
 ## NOT verified
+- Edge pass: online leave / AFK / host hand-over only through the shared module's tests; two-tab sync while both tabs run computer turns (reasoned: equal versions are ignored).
 - The table look on a real iPhone; real card size feel (reasoned); the card flip on a real device.
 - Sounds by ear on a real iPhone (headless WebKit on Windows has no Web Audio; sound tested with a fake AudioContext only). Confetti in headless WebKit runs at a low frame rate, so screenshots show it early.
 - `tools/zoomcheck.mjs` after this change: its clicks time out on this busy laptop for both the old and new build (4-5 of 57 checks each run); zoom code was not touched.

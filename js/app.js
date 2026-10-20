@@ -283,7 +283,9 @@
         render(); tick();
       }, d);
     } else if (P.kind === 'human') {
-      if (humans() > 1 && app.lastHuman !== g.turn && app.lastHuman !== -1) showCover(g.turn);
+      // claiming and placing show nothing secret unless missions are dealt: no cover between every single army
+      const secret = !['claim', 'place'].includes(g.phase) || g.players.some(p => p.mission);
+      if (humans() > 1 && app.lastHuman !== g.turn && app.lastHuman !== -1 && secret) showCover(g.turn);
       app.lastHuman = g.turn;
     }
   }
@@ -299,7 +301,7 @@
     const g = app.game;
     if (app.tab === 'odds') { // tap a territory to load its armies as the defender
       if (!g) return;
-      app.calc.D[app.calc.D.length - 1] = g.armies[t]; store.set('risk.calc', app.calc); render(); return;
+      app.calc.D[app.calc.D.length - 1] = Math.max(1, g.armies[t]); // unclaimed land has 0: the calculator starts at 1 store.set('risk.calc', app.calc); render(); return;
     }
     if (!g || !isHumanTurn()) { if (g) toast(T[t].name); return; }
     if (app.tab !== 'play') goTab('play');
@@ -311,7 +313,7 @@
         else bad(g.quota ? 'Yours or a neutral one' : 'Place on your own land');
         return;
       }
-      case 'capital': if (g.owner[t] === me) { act({ type: 'capital', t }); afterAct(); } return;
+      case 'capital': if (g.owner[t] === me) { act({ type: 'capital', t }); afterAct(); } else bad('Pick one of your own'); return;
       case 'reinforce': {
         if (g.mustTrade) { bad('Trade a card set first'); return; }
         if (g.owner[t] !== me) { bad('Place on your own land'); return; }
@@ -412,6 +414,7 @@
         return `<div class="opp${turn ? ' turn' : ''}${p.out ? ' out' : ''}" data-p="${i}" style="--pc:${p.hex}"><div class="tbl-plate"><i></i><span class="nm">${esc(p.name)}</span></div>` +
           `<div class="seat-row"><span class="backs" aria-label="${k} cards">${backs}${k ? `<b class="num">${k}</b>` : ''}</span><span class="st num">${E.countOwned(g, i)}▲ ${armiesOf(g, i)}⚑</span></div></div>`;
       }).join('');
+      fitSeats();
     }
     // your place: plate, unplaced armies, hand, deck, discard pile
     const P = v >= 0 ? g.players[v] : null, hand = P && Array.isArray(P.cards) ? P.cards : [];
@@ -433,6 +436,14 @@
     if (fanApi && fanApi.disconnect) fanApi.disconnect();
     fanApi = TABLE.fan($('#hand'), hand.map(c => riskCard(c, { on: sel.includes(c), own: CARDS[c].terr >= 0 && g.owner[CARDS[c].terr] === v })), { pick: false, spread: 0.66, lift: 12, maxRot: 10, arc: 0.8 });
   }
+  // many players on a narrow screen: show one card back (the count stays), then smaller print, until every seat fits
+  function fitSeats() {
+    const box = $('#seats'), over = () => [...box.querySelectorAll('.opp')].some(o => { const r = o.querySelector('.seat-row'); return r && r.getBoundingClientRect().width > o.getBoundingClientRect().width + 0.5; });
+    box.classList.remove('tight', 'tighter');
+    if (!box.clientWidth || !over()) return;
+    box.classList.add('tight'); if (over()) box.classList.add('tighter');
+  }
+  window.addEventListener('resize', () => { if (!$('#seats').hidden) fitSeats(); });
   // tap a card in your hand to pick it for a set (only while you are placing armies)
   $('#mine').addEventListener('click', e => {
     const c = e.target.closest('#hand [data-card]'); if (!c) return;
@@ -570,7 +581,7 @@
     if (S.seats.slice(0, S.nPlayers).some(s => s.kind === 'online')) { makeRoom(); return; }
     const n = S.nPlayers;
     const seats = S.seats.slice(0, n).map((s, i) => ({ name: s.kind === 'human' ? (S.seats.slice(0, n).filter(x => x.kind === 'human').length > 1 ? E.COLORS[i].name : 'You') : E.COLORS[i].name + ' ' + s.level[0].toUpperCase(), kind: s.kind, level: s.level }));
-    app.game = E.newGame(seats, S.rules); view.resetZoom();
+    app.game = E.newGame(seats, S.rules); app.game.gid = Date.now(); view.resetZoom();
     app.sel = -1; app.to = -1; app.cards = []; app.lastHuman = -1; app.hint = null;
     store.set('risk.game', app.game);
     fxReset(); FX.play('shuffle'); render(); tick();
@@ -582,7 +593,7 @@
     if (g.phase === 'over') {
       const W = g.players[g.winner];
       return `<div class="phase"><div class="cap">Game over</div><div class="big" style="color:${W.hex};margin:4px 0 6px">${W.name === 'You' ? 'You win' : esc(W.name) + ' wins'}</div>
-        <div class="small muted">${g.round} rounds.</div>${luckTable(g)}${timeline(g)}
+        <div class="small muted">${winHow(g)}${g.round} rounds.</div>${luckTable(g)}${timeline(g)}
         <div class="row" style="margin-top:10px"><button class="btn primary grow" id="againBtn">New game</button></div></div>`;
     }
     if (!human) {
@@ -607,7 +618,8 @@
           <div class="row" style="margin-top:10px"><button class="btn sm" data-auto="one">Pick for me</button></div></div>`;
       case 'reinforce': {
         const hand = Array.isArray(P.cards) ? P.cards : [];
-        const sets = E.findSets(hand);
+        // after wiping someone out, sets can be traded only until you hold 4 or fewer cards
+        const sets = g.after && hand.length <= 4 ? [] : E.findSets(hand);
         const sel = app.cards.filter(c => hand.includes(c));
         const okSet = sel.length === 3 && E.isSet(sel);
         const val = okSet ? E.tradeValue(g, sel) : (sets.length ? E.tradeValue(g, sets[0]) : E.setValue(g, ['I', 'I', 'I']));
@@ -652,6 +664,12 @@
       }
     }
     return '';
+  }
+  // how the game ended (and the winner's mission, now that everyone may see it)
+  function winHow(g) {
+    const W = g.players[g.winner];
+    if (g.how === 'mission' && W.mission && !W.mission.hidden) return `Mission: ${esc(E.missionText(W.mission))}. `;
+    return ({ world: 'Conquered the world. ', capital: 'Took the headquarters. ', limit: 'Turn limit: most land. ', mission: 'Secret mission done. ' })[g.how] || '';
   }
   function phaseName(g) { return { claim: 'claiming', place: 'placing', capital: 'choosing HQ', reinforce: 'placing', attack: 'attacking', occupy: 'moving in', fortify: 'moving' }[g.phase] || ''; }
 
@@ -713,6 +731,7 @@
     const bonusOf = s => E.tradeValue(g, s) + (s.some(c => CARDS[c].terr >= 0 && g.owner[CARDS[c].terr] === g.turn) ? 2 : 0) - s.filter(c => CARDS[c].sym === 'W').length;
     on('hintBtn', () => {
       const h = AI.hint(g, g.turn);
+      if (g.phase === 'reinforce' && g.mustTrade) { bad('Trade a card set first'); return; }
       if (g.phase === 'reinforce') { app.hint = h.place; render(); toast('Suggested: ' + T[h.place].name); return; }
       const a = h.attacks[0];
       if (!a || a.score <= 0) { toast('Hint: stop attacking now'); return; }
@@ -952,5 +971,19 @@
     R.resume().then(back => { if (back) toast('Back in your room'); });
   }
   window.addEventListener('risknet', hookNet); hookNet();
+  // the same game open in two tabs: a move made in one shows up in the other (no stale table to play on)
+  window.addEventListener('storage', e => {
+    if (e.key !== 'risk.game' || app.net) return;
+    let n = null; try { n = e.newValue ? JSON.parse(e.newValue) : null; } catch (err) { return; }
+    const cur = app.game;
+    if (n && !okGame(n)) return;
+    if (!n) { if (!cur) return; clearTimeout(tickT); app.game = null; }
+    else if (cur && n.gid === cur.gid && (n.ver || 0) <= (cur.ver || 0)) return; // same game, nothing newer
+    else { app.game = n; if (!cur || n.gid !== cur.gid) view.resetZoom(); }
+    app.sel = -1; app.to = -1; app.cards = []; app.hint = null;
+    document.querySelectorAll('.cover').forEach(c => c.remove());
+    app.lastHuman = app.game && humans() > 1 ? -2 : -1;
+    fxReset(); render(); tick();
+  });
   window.__risk = app; // for headless checks
 })();

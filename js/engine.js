@@ -269,6 +269,8 @@
         const cs = a.cards;
         if (!Array.isArray(cs) || cs.length !== 3 || new Set(cs).size !== 3 || !cs.every(c => P.cards.includes(c))) return 'not your cards';
         if (!isSet(cs)) return 'not a set';
+        // after wiping someone out you trade only until you hold 4 or fewer; more sets wait for your next turn
+        if (st.after === 'attack' && P.cards.length <= 4) return 'you hold 4 or fewer cards: trade again on your next turn';
         const v = tradeValue(st, cs);
         st.sets++; st.reserve += v; st.stats[p] && (st.stats[p].cardsArmies += v);
         P.cards = P.cards.filter(c => !cs.includes(c));
@@ -284,6 +286,7 @@
       }
       case 'attack': {
         if (!canAttack(st, a.from, a.to)) return 'cannot attack there';
+        if (a.dice != null && !(Number.isInteger(a.dice) && a.dice >= 1)) return 'dice must be 1, 2 or 3';
         const dice = Math.min(a.dice || 3, 3, st.armies[a.from] - 1);
         if (dice < 1) return 'need two armies';
         roll(st, a.from, a.to, dice);
@@ -450,7 +453,7 @@
     st.turns++;
     if (st.turns >= st.rules.maxTurns * active(st).length) { // safety stop: most territories wins
       const best = active(st).sort((a, b) => countOwned(st, b) - countOwned(st, a))[0];
-      st.winner = best; st.phase = 'over'; st.stop = true; log(st, `Turn limit: ${pname(st, best)} holds the most land.`); return;
+      st.winner = best; st.phase = 'over'; st.stop = true; st.how = 'limit'; log(st, `Turn limit reached. Most land: ${pname(st, best)}.`); return;
     }
     const next = nextIdx(st, p, q => !st.players[q].out && st.players[q].kind !== 'neutral');
     if (next <= p) { st.round++; snapshot(st); }
@@ -493,17 +496,17 @@
   function checkWin(st) {
     if (st.phase === 'claim' || st.phase === 'place' || st.phase === 'capital') return false;
     const act = active(st);
-    let w = -1, how = '';
-    if (act.length === 1) { w = act[0]; how = 'conquered the world'; }
+    let w = -1, how = '', kind = '';
+    if (act.length === 1) { w = act[0]; how = 'conquered the world'; kind = 'world'; }
     if (w < 0 && st.rules.mode === 'mission') {
       // the player whose turn it is checks first, then the rest in order
       const order = [st.turn].concat(act.filter(i => i !== st.turn));
-      for (const i of order) if (missionDone(st, i)) { w = i; how = 'completed the secret mission'; break; }
+      for (const i of order) if (missionDone(st, i)) { w = i; how = 'completed the secret mission'; kind = 'mission'; break; }
     }
     if (w < 0 && st.rules.mode === 'capital') {
-      for (const i of act) if (capitalDone(st, i)) { w = i; how = 'took the headquarters'; break; }
+      for (const i of act) if (capitalDone(st, i)) { w = i; how = 'took the headquarters'; kind = 'capital'; break; }
     }
-    if (w >= 0) { snapshot(st); st.winner = w; st.phase = 'over'; st.reserve = 0; st.occupy = null; log(st, `${st.players[w].name} ${how}!`); return true; }
+    if (w >= 0) { snapshot(st); st.winner = w; st.how = kind; st.phase = 'over'; st.reserve = 0; st.occupy = null; log(st, `${st.players[w].name} ${how}!`); return true; }
     return false;
   }
 

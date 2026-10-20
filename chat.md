@@ -33,3 +33,8 @@
 - **Built:** wood table with opponents across, printed continent-coloured framed board, your hand fan / army tray / deck / discard pile at the near edge, paper Risk cards with territory shapes, real red/ivory dice, physical card motion (deal + flip, trade onto pile); shared `_table` kit copied in; fx.js re-copied.
 - **Verified:** `node --test "tests/*.test.*"` 34 pass + 1 skip (incl. online); WebKit shots of 5 states at 393x659, 320x568, 659x393, 1280x800: no overflow, no page scroll, no console errors; Roll click shows red + ivory dice with animations, no errors; Effects speed and Computer speed change independently; two reviewer rounds, fixes applied; zoomcheck laptop flake same as before (4-5 click timeouts).
 - **Open:** real iPhone look; printed bonus legend / trade track not built.
+
+## 2026-10-20 — edge pass (builder agent)
+- **Asked:** Tim: "Could you focus on making each game perfect especially in scenarios that the game doesn't expect or are a little weird."
+- **Built:** 13 fixes (see progress.md "Edge pass"): wipe-out trade limit, dice check, end screen says how, Threat lens crash, Odds 0 defender, Hint/HQ messages, no setup covers, two-tab sync, crowded seat rows.
+- **Verified:** 48 scenarios; new engine tests failed first then pass; `node --test "tests/*.test.*"` 38 pass + 1 skip; WebKit checks 74 (13 failed on the old build, 0 after) at 6 sizes.

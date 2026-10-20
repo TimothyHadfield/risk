@@ -240,3 +240,50 @@ test('every engine roll follows the dice rule (ties to the defender)', () => {
   }
   assert.ok(ties > 20, 'ties happened and went to the defender');
 });
+
+// ---- edge pass (2026-10-20): odd moments at a real table
+function wipeOut(hand0, hand2) { // P0 about to wipe out P2 (one army on Siam), P0 holds the rest except P1's Peru
+  let st = runSetup(E.newGame(seats(3), {}, 21));
+  st.owner.fill(0); st.armies.fill(2);
+  board(st, { siam: [2, 1], india: [0, 30], peru: [1, 3] });
+  st.players.forEach(p => { p.cards = []; });
+  st.players[0].cards = hand0; st.players[2].cards = hand2;
+  st.turn = 0; st.phase = 'attack'; st.after = null; st.mustTrade = false;
+  let g = 0; while (st.owner[K.siam] !== 0 && g++ < 200) st = E.apply(st, { type: 'blitz', from: K.india, to: K.siam });
+  if (st.phase === 'occupy') st = E.apply(st, { type: 'occupy', n: st.occupy.min });
+  return st;
+}
+const bySym = s => M.CARDS.filter(c => c.sym === s).map(c => c.id);
+test('after a wipe-out you trade only down to 4 cards, then no more sets until your next turn', () => {
+  const [I, C, A] = ['I', 'C', 'A'].map(bySym);
+  let st = wipeOut([I[0], I[1], I[2], C[0]], [C[1], C[2], A[0]]); // 7 cards
+  assert.strictEqual(st.phase, 'reinforce'); assert.ok(st.mustTrade);
+  st = E.apply(st, { type: 'trade', cards: [I[0], I[1], I[2]] }); // 4 left: C C C A
+  assert.strictEqual(st.players[0].cards.length, 4);
+  assert.throws(() => E.apply(st, { type: 'trade', cards: [C[0], C[1], C[2]] }), /4 or fewer|next turn/);
+  // the computer must not get stuck trying
+  const a = AI.choose(st, 0); assert.notStrictEqual(a.type, 'trade');
+  st = E.apply(st, a);
+});
+test('dice must be a whole number from 1 to 3 (online seats cannot send 2.5)', () => {
+  let st = runSetup(E.newGame(seats(3), {}, 9));
+  st.owner.fill(1); st.armies.fill(1); board(st, { alaska: [0, 8], kamchatka: [1, 5] });
+  st.turn = 0; st.phase = 'attack';
+  assert.throws(() => E.apply(st, { type: 'attack', from: K.alaska, to: K.kamchatka, dice: 2.5 }), /dice/);
+  assert.strictEqual(E.apply(st, { type: 'attack', from: K.alaska, to: K.kamchatka, dice: 9 }).lastRoll.att.length, 3, 'too many = the most allowed');
+});
+test('the finished game says how it was won', () => {
+  let st = runSetup(E.newGame(seats(3), { maxTurns: 2 }, 3));
+  let k = 0; while (st.phase !== 'over' && k++ < 5000) st = E.apply(st, AI.choose(st, st.turn));
+  assert.strictEqual(st.how, 'limit');
+  assert.ok(!/ holds /.test(st.log[st.log.length - 1]), 'no "You holds"');
+  st = wipeOut([], []); st.rules.mode = 'mission';
+  const done = (g) => { let s = g; let n = 0; while (s.owner[K.peru] !== 0 && n++ < 200) s = E.apply(s, { type: 'blitz', from: K.brazil, to: K.peru }); if (s.phase === 'occupy') s = E.apply(s, { type: 'occupy', n: s.occupy.min }); return s; };
+  st.armies[K.brazil] = 40; st.phase = 'attack'; st.after = null; st.mustTrade = false; st.reserve = 0;
+  assert.strictEqual(done(st).how, 'world');
+});
+test('the threat map copes with land nobody has claimed yet', () => {
+  const st = E.newGame(seats(3), { setup: 'claim' }, 3);
+  const s2 = E.apply(st, { type: 'claim', t: K.alaska });
+  assert.doesNotThrow(() => AI.threat(s2, K.alaska));
+});

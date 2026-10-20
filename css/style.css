@@ -178,6 +178,9 @@ body.at-table { --seats-h: 46px; --mine-h: 78px; }
 .backs .tbl-card { margin-left: -6px; box-shadow: 0 1px 2px rgba(0,0,0,.5); } .backs .tbl-card:first-child { margin-left: 0; }
 .backs b { margin-left: 3px; font-size: 10.5px; }
 .st { font-variant-numeric: tabular-nums; }
+/* crowded seats (app.js fitSeats): one card back with the count, then smaller print */
+.seats.tight .backs .tbl-card:nth-child(n+2) { display: none; }
+.seats.tighter .seat-row { font-size: 8.5px; gap: 2px; letter-spacing: -.02em; } .seats.tighter .backs b { font-size: 9px; margin-left: 2px; }
 
 /* ---------- your place at the near edge ---------- */
 .mine { flex: none; height: var(--mine-h); display: flex; align-items: flex-end; gap: 8px; padding: 0 10px 6px; position: relative; z-index: 2; }

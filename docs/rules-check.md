@@ -27,6 +27,7 @@ Sources (checked 2026-10-19):
 | +1 option | 4, 5, 6 ... | S1 "Rule variations for experts", S2 (1980 US) | T engine |
 | +2 territory bonus | a traded card showing a territory you hold: +2 armies placed there (once per trade) | S2, S3 | T engine |
 | Forced trade | 5+ cards at the start of your turn must trade; after wiping out a player and holding 6+, trade down to 4 or fewer at once, place, keep attacking | S1 (five-card limit; elimination: down to 4 or less), S2, S3 | T engine |
+| Trading after a wipe-out stops at 4 cards | A wipe-out that leaves you with 6+ cards makes you trade at once, but only until you hold 4 or fewer; then, further sets wait for your next turn (fixed 2026-10-20: a 4-card hand with a set could trade again) | S1 ("until he has 4 or less"), S3 ("reduce your hand to 4 or fewer cards") | T engine |
 | Taking cards on elimination | the eliminator gets all their cards | S1, S3 | T engine |
 | End-of-turn move | Along connected own land (S3 "maneuver", S1 expert variant) or one move to a neighbour (S1 1959 free move); one move per turn | S1, S3 | T engine |
 | Secret missions | 14: N.Am+Africa, N.Am+Australia, Asia+S.Am, Asia+Africa, Europe+S.Am+one more, Europe+Australia+one more, 24 territories, 18 territories with 2+ armies, destroy each of 6 colours. Destroy-colour becomes "24 territories" if it is your colour or someone else wipes them out. 12-card option drops the two "Europe + ... + one more" | S2 (full list; 1998 US has 12), S3 (12 mission cards, missions for absent colours removed) | T engine |

@@ -22,7 +22,7 @@
   const enemyNbrs = (st, t) => ADJ[t].filter(u => st.owner[u] !== st.owner[t]);
   const isBorder = (st, t) => enemyNbrs(st, t).length > 0;
   function threat(st, t) { // enemy armies that could hit t, minus our armies there
-    let e = 0; ADJ[t].forEach(u => { if (st.owner[u] !== st.owner[t] && st.players[st.owner[u]].kind !== 'neutral') e += st.armies[u] - 1; });
+    let e = 0; ADJ[t].forEach(u => { const o = st.owner[u]; if (o >= 0 && o !== st.owner[t] && st.players[o].kind !== 'neutral') e += st.armies[u] - 1; }); // unclaimed land threatens nobody
     return e;
   }
 
@@ -132,7 +132,7 @@
 
   function reinforce(st, p, lvl, r) {
     const P = st.players[p];
-    const sets = E.findSets(P.cards);
+    const sets = st.after === 'attack' && P.cards.length <= 4 ? [] : E.findSets(P.cards); // after a wipe-out: only down to 4 cards
     if (sets.length && (st.mustTrade || lvl !== 'easy')) {
       // prefer the set that earns the +2 territory bonus and keeps wilds
       let best = sets[0], bs = -1e9;
