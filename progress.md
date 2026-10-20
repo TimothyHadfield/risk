@@ -48,6 +48,12 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - Held up: rapid double/triple taps, taps during computer turns, reload in every phase, Back with sheets, 2p neutral limit, zoom taps, 163-game random-move engine fuzz.
 - Still slow (low): the Odds chain with ~200-army stacks takes ~1 s per tap.
 
+## Design pass (2026-10-20)
+- Phone: map badges, +bonus boxes and odds tags drawn 1.36x (`.sc` groups in mapview.js, set by a 899px media query); invisible tap circle per badge (r = min(24, half the distance to the nearest badge)).
+- Laptop: board box fills the column height; the SVG sea runs past the viewBox (`#map { overflow: visible }` on desktop only, so phone zoom scroll is unaffected). Panel 400px, cards 68x92.
+- Fixed: Settings switches were stretched full width (label.switch had flex:1); toggles no longer wrap; Safari grey select boxes replaced; "?" dots have a 40px tap ring; .btn.sm/stepper/zoom 40px; log fades at the top; dice picker uses the drawn die; computer turn shows from → to; current player chip tinted; continent outlines dimmed once a game is on.
+- Before/after screenshots: scratchpad `design/risk/before|after` (states built by `gen.js`, shot by `shoot.sh`).
+
 ## NOT verified
 - Per-territory card symbols against a physical deck; fixed-value symbol pairing.
 - On a real iPhone (only WebKit at iPhone size, headless).
