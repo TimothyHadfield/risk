@@ -9,7 +9,7 @@
 <meta name="description" content="Play Risk against measured computer players, with exact battle odds on every attack and a real-table odds calculator.">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 <div id="app">
@@ -20,7 +20,7 @@
   </header>
   <main id="main">
     <section class="map-col"><div class="map-wrap" id="mapWrap"><svg id="map" role="img" aria-label="World map"></svg></div>
-      <button class="zoom" id="zoomBtn" aria-label="Zoom map"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21M10.5 7.5v6M7.5 10.5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <div class="zoom-bar"><button class="zoom fit" id="fitBtn" aria-label="Fit whole board" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="zoom" id="zoomOut" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M6 12h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button><button class="zoom" id="zoomIn" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>
     </section>
     <section class="panel-col" id="panel"></section>
   </main>
@@ -35,9 +35,9 @@
 <script src="js/engine.js?v=1"></script>
 <script src="js/ai.js?v=1"></script>
 <script src="js/strength.js?v=1"></script>
-<script src="js/mapview.js?v=3"></script>
+<script src="js/mapview.js?v=4"></script>
 <script src="js/adapter.js?v=1"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/app.js?v=6"></script>
 <script type="module" src="js/net.js?v=1"></script>
 </body>
 </html>

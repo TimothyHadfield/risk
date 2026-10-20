@@ -31,7 +31,7 @@
   // ------------------------------------------------------------ app state
   const app = {
     tab: 'play', game: store.get('risk.game', null), sel: -1, to: -1, amount: 1, dice: 3, cards: [], hint: null,
-    moveN: 0, busy: false, lastHuman: -1, covered: false, lens: 'owner', zoom: false,
+    moveN: 0, busy: false, lastHuman: -1, covered: false, lens: 'owner',
     calc: store.get('risk.calc', { A: 10, D: [5] }),
     history: [],
     net: null, // online room snapshot while in a room
@@ -56,7 +56,7 @@
   function goTab(id, push) {
     if (app.tab === id) return;
     if (push !== false) history.pushState({ tab: id }, '', '#' + id);
-    app.tab = id; app.sel = -1; app.to = -1; render();
+    app.tab = id; app.sel = -1; app.to = -1; view.resetZoom(); render();
     $('#panel').scrollTop = 0;
   }
   document.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) goTab(b.dataset.tab); });
@@ -103,13 +103,13 @@
 
   // ------------------------------------------------------------ map
   const view = new window.MapView($('#map'), t => onTerritory(t));
-  // the map box only scrolls when zoomed (taps near the edge must not shift it)
-  $('#mapWrap').addEventListener('scroll', e => { if (!app.zoom) { e.target.scrollTop = 0; e.target.scrollLeft = 0; } });
-  $('#zoomBtn').addEventListener('click', () => {
-    app.zoom = !app.zoom; const w = $('#mapWrap');
-    w.classList.toggle('zoomed', app.zoom); $('#zoomBtn').setAttribute('aria-pressed', app.zoom);
-    if (app.zoom && app.sel >= 0) { const g = window.RiskGeo.terr[app.sel]; w.scrollLeft = g.x / 1000 * w.scrollWidth - w.clientWidth / 2; w.scrollTop = g.y / 560 * w.scrollHeight - w.clientHeight / 2; }
-  });
+  // the map box never scrolls (taps near the edge must not shift it); zoom works on the drawing itself
+  $('#mapWrap').addEventListener('scroll', e => { e.target.scrollTop = 0; e.target.scrollLeft = 0; });
+  // one zoom: auto fits the whole board; pinch / wheel / + / - zoom in; the fit button glides back (lit when zoomed)
+  view.onZoom = auto => { const f = $('#fitBtn'); f.classList.toggle('lit', !auto); f.setAttribute('aria-pressed', String(!auto)); };
+  $('#zoomIn').addEventListener('click', () => view.zoomBy(1.6));
+  $('#zoomOut').addEventListener('click', () => view.zoomBy(1 / 1.6));
+  $('#fitBtn').addEventListener('click', () => view.fit());
 
   function mapUI() {
     const g = app.game, ui = { names: S.names };
@@ -380,7 +380,7 @@
     app.net = Object.assign({}, s, { key, sending: app.net ? app.net.sending : false });
     if (s.pub && (s.status === 'playing' || s.status === 'finished')) {
       const g = window.RiskGame.merge(s.pub, s.mine, s.mySeat);
-      app.game = g;
+      app.game = g; if (!prev) view.resetZoom();
       if (!wasNet || !prev || prev.ver !== g.ver) settleSelection(prev, g);
       if (app.net.sending && (!prev || prev.ver !== g.ver)) app.net.sending = false;
     } else app.game = null;
@@ -423,7 +423,7 @@
     if (S.seats.slice(0, S.nPlayers).some(s => s.kind === 'online')) { makeRoom(); return; }
     const n = S.nPlayers;
     const seats = S.seats.slice(0, n).map((s, i) => ({ name: s.kind === 'human' ? (S.seats.slice(0, n).filter(x => x.kind === 'human').length > 1 ? E.COLORS[i].name : 'You') : E.COLORS[i].name + ' ' + s.level[0].toUpperCase(), kind: s.kind, level: s.level }));
-    app.game = E.newGame(seats, S.rules);
+    app.game = E.newGame(seats, S.rules); view.resetZoom();
     app.sel = -1; app.to = -1; app.cards = []; app.lastHuman = -1; app.hint = null;
     store.set('risk.game', app.game);
     render(); tick();

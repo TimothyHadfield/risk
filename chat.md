@@ -15,3 +15,9 @@
 - **Asked:** Tim: "the map of the US in TTR looks nothing like the US. Fix this and any other similar problems accross the games". Manager added: redraw the card Cavalry icon as horse and rider and Artillery as a cannon on wheels; make coasts read clearly.
 - **Built:** `tools/buildgeo.mjs` draws the board from Natural Earth coastlines (Miller projection, Europe gently enlarged, big lakes cut out), countries assigned to the 42 territories with cut lines like the classic board; invisible sea tap areas per territory; grey non-game land; new card icons.
 - **Verified:** 30 tests (new map tests failed on the old map, pass on the new); tap-area sampling at 393px: smallest 330 px² (Irkutsk) vs 291 before (Iceland), Iceland 291 -> 813; one read-only reviewer named the world and found nothing major; screenshots `scratchpad/design/risk-maps/before|after`.
+
+## 2026-10-20 — one auto-fit zoom (builder agent)
+- **Asked:** Tim: "some games have maps and whatnot you can zoom in and out of often. Make it so that there is only an auto zoom that automatically fits the whole board in sight and then you can zoom if you want with easily reseting back to auto mode."
+- **Built:** viewBox zoom in mapview.js (auto fit, pinch, wheel, + / -, clamped pan, fit glide); + / - / fit buttons on phone and laptop; old 2.1x toggle removed; turned-phone board box fits the screen.
+- **Verified:** `tools/zoomcheck.mjs` (WebKit, 3 sizes, 57 checks): 28 failed on the old code, all pass now; `npm test` 29 pass + 1 skip; screenshots `scratchpad/design/risk-zoom/before|after`.
+- **Open:** real iPhone pinch, Safari trackpad pinch.

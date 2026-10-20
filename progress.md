@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-20 (real-coastline map + card icons).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-20 (one auto-fit zoom).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.
@@ -21,6 +21,7 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 ## Standing instructions (Tim's words)
 - "add risk, clue, battleship, connect four, stratego, clue, checkers, pandemic, splendor, king of tokyo, 7 wonders, and evolution to the list of games."
 - "the map of the US in TTR looks nothing like the US. Fix this and any other similar problems accross the games" (2026-10-20): maps must read as the real place (real coastlines, lakes, islands).
+- "some games have maps and whatnot you can zoom in and out of often. Make it so that there is only an auto zoom that automatically fits the whole board in sight and then you can zoom if you want with easily reseting back to auto mode." (2026-10-20; same behaviour in TTR, Risk, Pandemic, Carcassonne)
 - From the briefs: exact classic board, 44-card deck, starting armies by player count, escalating and fixed card values, capital and secret-mission variants, own SVG map; exact battle odds, chain odds, expected losses, continent value; computers at measured strength; seats can be you, computer or online in any mix. $0, no copyrighted art or rulebook text.
 
 ## Measured computer strength (tools/measure.js, 400 games each, 2026-10-19)
@@ -32,7 +33,8 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - `js/online.js` must stay a byte-for-byte copy of `../_online/online.js`. Risk is gameId `risk`.
 - Online writes: one state per move, and setup is one army per move, so a full online game is several thousand writes of the shared 20,000/day free quota (it stops, never bills).
 - WebKit offset bug: animating `transform` on an SVG `<g>` badge moved it; the pop now animates the circle's `r`.
-- The map box is overflow-hidden; its scroll is reset unless zoomed (taps near the edge used to shift it).
+- The map box is overflow-hidden and its scroll is always reset (taps near the edge used to shift it). Zoom changes the SVG viewBox only (mapview.js `initZoom`); `#map` has `touch-action: none`, so pinch/drag never reach the page.
+- Zoom check: serve the folder, then `node tools/zoomcheck.mjs http://127.0.0.1:<port>/` (WebKit at 393x659, 659x393, 1280x800; 19 checks each; uses Playwright from `~/.claude/tools`). Not part of `npm test`.
 - Map build: dev dependencies only (`node_modules` is gitignored, site loads nothing from them). topojson-simplify weights are square DEGREES, not steradians. Cut lines must get T-junction vertices before the Europe warp, or borders open tiny gaps. The map test skips the rebuild check when `node_modules` is missing.
 - The Russia sliver touching North Korea is given to Mongolia (else China would touch Kamchatka); Kazakhstan's far east tip is Ural and Mongolia's far west tip is Siberia so Ural-China and Siberia-China touch, as on the board; Egypt includes eastern Libya.
 
@@ -62,7 +64,13 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - Every territory has an invisible sea tap area (circle, never past halfway to another badge, under the land). Phone tap sampling: smallest 330 px² (Irkutsk), before 291 (Iceland).
 - Card icons redrawn: Cavalry = horse and rider, Artillery = cannon on a wheel.
 
+## Zoom (2026-10-20)
+- One zoom only: auto mode fits the whole board (page load, tab change, new game, joining a room, phone rotation). Pinch, wheel / trackpad pinch, or + / - zoom in (max 6x); drag pans only when zoomed, clamped to the board; zooming out stops at the fit = auto again. Fit button (corner brackets) glides back; lit amber when zoomed, dimmed in auto.
+- Controls bottom-left of the map, now on laptop too: + above -, fit beside +, placed in empty Pacific so they cover no territory or bonus badge at 393px.
+- Removed the old 2.1x zoom toggle (phone only). Turned phone: the board box shrinks (`max-height`) so the whole board stays on screen (it ran 24px off-screen before).
+
 ## NOT verified
+- Zoom on a real iPhone (pinch tested with synthetic touch pointers in WebKit) and Safari's laptop trackpad pinch (gesture events); no double-tap reset (it would clash with tapping territories).
 - Per-territory card symbols against a physical deck; fixed-value symbol pairing.
 - On a real iPhone (only WebKit at iPhone size, headless).
 - Online with three or more real people, and host hand-over after the host vanishes (module's own tests cover it).

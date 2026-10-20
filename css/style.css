@@ -39,14 +39,16 @@ button { cursor: pointer; }
 /* ---------- main ---------- */
 main { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .map-col { position: relative; flex: none; }
-.map-wrap { width: 100%; aspect-ratio: 1000 / 560; overflow: hidden; background: #0d1322; }
-.map-wrap.zoomed { overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
-.map-wrap.zoomed::-webkit-scrollbar { display: none; }
-#map { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
-.map-wrap.zoomed #map { width: 210%; height: 210%; }
-.zoom { position: absolute; left: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: rgba(15,17,23,.82); color: var(--text); display: grid; place-items: center; padding: 0; }
+/* a turned phone: the board box shrinks so the whole board stays on screen above the panel */
+.map-wrap { width: 100%; aspect-ratio: 1000 / 560; max-height: calc(100dvh - var(--head) - var(--tabh) - 110px); overflow: hidden; background: #0d1322; }
+#map { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; touch-action: none; }
+.zoom-bar { position: absolute; left: 8px; bottom: 8px; display: grid; grid-template-columns: 40px 40px; grid-template-areas: "in fit" "out ."; gap: 6px; pointer-events: none; }
+.zoom-bar .zoom { pointer-events: auto; }
+#zoomIn { grid-area: in; } #zoomOut { grid-area: out; } #fitBtn { grid-area: fit; }
+.zoom { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: rgba(15,17,23,.82); color: var(--text); display: grid; place-items: center; padding: 0; }
 .zoom svg { width: 20px; height: 20px; }
-.zoom[aria-pressed="true"] { color: var(--accent-warm); border-color: var(--accent-warm); }
+.zoom.fit { color: var(--muted); opacity: .55; transition: color .2s, border-color .2s, opacity .2s; }
+.zoom.fit.lit { color: var(--accent-warm); border-color: var(--accent-warm); opacity: 1; }
 .panel-col { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 14px; scrollbar-width: thin; }
 
 @media (min-width: 900px) {
@@ -54,11 +56,10 @@ main { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   #app { grid-template-rows: var(--head) 1fr; }
   .tabs-top { display: flex; }
   .tabs-bottom { display: none; }
-  .zoom { display: none; }
   main { flex-direction: row; align-items: stretch; padding: 16px 18px; gap: 18px; }
   .map-col { flex: 1 1 auto; min-width: 0; max-width: calc((100dvh - var(--head) - 32px) * 1000 / 560); }
   /* the board box fills the column height; the drawn sea runs past the map so there is no empty band */
-  .map-wrap { border-radius: 14px; border: 1px solid var(--line); aspect-ratio: auto; height: 100%; }
+  .map-wrap { border-radius: 14px; border: 1px solid var(--line); aspect-ratio: auto; height: 100%; max-height: none; }
   #map { overflow: visible; }
   .panel-col { flex: 0 0 400px; max-height: 100%; padding: 0 4px 12px; }
 }

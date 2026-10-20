@@ -20,8 +20,8 @@
       <pattern id="waves" width="28" height="14" patternUnits="userSpaceOnUse"><path d="M0 10 Q7 6 14 10 T28 10" fill="none" stroke="#1d2a47" stroke-width="1"/></pattern>
       <filter id="lift" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000" flood-opacity=".55"/></filter>`;
     // the sea runs past the frame so a laptop's taller map box shows ocean, not a gap
-    el('rect', { x: -500, y: -400, width: 2000, height: 1360, fill: 'url(#sea)' }, svg);
-    el('rect', { x: -500, y: -400, width: 2000, height: 1360, fill: 'url(#waves)', opacity: .7 }, svg);
+    el('rect', { x: -1500, y: -400, width: 4000, height: 1360, fill: 'url(#sea)' }, svg);
+    el('rect', { x: -1500, y: -400, width: 4000, height: 1360, fill: 'url(#waves)', opacity: .7 }, svg);
     // sea lanes / land links
     const links = el('g', { class: 'links' }, svg);
     G.links.forEach(([a, b]) => {
@@ -83,7 +83,102 @@
     if (mq) { if (mq.addEventListener) mq.addEventListener('change', setScale); else if (mq.addListener) mq.addListener(setScale); }
     const hit = e => { const t = e.target.closest('[data-t]'); if (t) this.onTap(+t.getAttribute('data-t')); };
     svg.addEventListener('click', hit);
+    this.initZoom();
   }
+
+  // ---- zoom: auto mode fits the whole board; pinch, wheel or + / - zoom in; fit glides back to auto
+  const W = 1000, H = 560, ZMAX = 6;
+  const BASE = [0, 0, W, H];
+  const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
+  MapView.prototype.initZoom = function () {
+    const svg = this.svg;
+    this.vb = BASE.slice(); this.auto = true; this.onZoom = null;
+    const pts = new Map(); let last = null, moved = 0, pinchD = 0, swallow = false;
+    const xy = e => [e.clientX, e.clientY];
+    svg.addEventListener('pointerdown', e => {
+      pts.set(e.pointerId, xy(e)); swallow = false; this.stopGlide();
+      if (pts.size === 1) { last = xy(e); moved = 0; }
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinchD = Math.hypot(a[0] - b[0], a[1] - b[1]); last = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; this.capture(e); swallow = true; }
+    });
+    svg.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, xy(e));
+      if (pts.size >= 2) {
+        const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        this.panBy(m[0] - last[0], m[1] - last[1]);
+        if (pinchD > 0) this.zoomAt(m[0], m[1], d / pinchD);
+        pinchD = d; last = m; return;
+      }
+      if (this.auto) return; // auto mode: a one-finger drag does nothing (taps still work)
+      const p = xy(e); moved += Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]);
+      if (moved > 6) { if (!swallow) { swallow = true; this.capture(e); } this.panBy(p[0] - last[0], p[1] - last[1]); }
+      last = p;
+    });
+    const up = e => { pts.delete(e.pointerId); if (pts.size === 1) last = [...pts.values()][0]; };
+    svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+    // a drag or pinch is not a tap on a territory
+    svg.addEventListener('click', e => { if (swallow) { swallow = false; e.stopPropagation(); e.preventDefault(); } }, true);
+    svg.addEventListener('wheel', e => {
+      e.preventDefault();
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+      this.zoomAt(e.clientX, e.clientY, Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0015)));
+    }, { passive: false });
+    // Safari's trackpad pinch on a laptop; on a phone the pointers above already handle it
+    let gs = 1;
+    svg.addEventListener('gesturestart', e => { e.preventDefault(); gs = 1; });
+    svg.addEventListener('gesturechange', e => { e.preventDefault(); if (pts.size) return; this.zoomAt(e.clientX, e.clientY, e.scale / gs); gs = e.scale; });
+    // turning the phone goes back to auto
+    const mq = root.matchMedia ? root.matchMedia('(orientation: portrait)') : null;
+    if (mq) { const r = () => this.resetZoom(); if (mq.addEventListener) mq.addEventListener('change', r); else if (mq.addListener) mq.addListener(r); }
+  };
+  MapView.prototype.capture = function (e) { try { this.svg.setPointerCapture(e.pointerId); } catch (_) { /* synthetic pointer */ } };
+  // where the viewBox sits on screen (the board is centred and fitted, like preserveAspectRatio meet)
+  MapView.prototype.frame = function (vb) {
+    const b = this.svg.getBoundingClientRect(), s = Math.min(b.width / vb[2], b.height / vb[3]);
+    return { s, ox: b.left + (b.width - vb[2] * s) / 2, oy: b.top + (b.height - vb[3] * s) / 2 };
+  };
+  MapView.prototype.setVB = function (vb) {
+    const w = clampN(vb[2], W / ZMAX, W), h = w * H / W;
+    const auto = w >= W - 0.5;
+    this.vb = auto ? BASE.slice() : [clampN(vb[0], 0, W - w), clampN(vb[1], 0, H - h), w, h];
+    this.svg.setAttribute('viewBox', this.vb.map(v => +v.toFixed(2)).join(' '));
+    if (auto !== this.auto) { this.auto = auto; if (this.onZoom) this.onZoom(auto); }
+  };
+  // zoom by f keeping the board point under the screen point (cx, cy) still
+  MapView.prototype.zoomAt = function (cx, cy, f, glide) {
+    const vb = this.glideTo || this.vb, a = this.frame(vb);
+    const ux = vb[0] + (cx - a.ox) / a.s, uy = vb[1] + (cy - a.oy) / a.s;
+    const w = clampN(vb[2] / f, W / ZMAX, W), h = w * H / W, nb = this.frame([0, 0, w, h]);
+    const next = [ux - (cx - nb.ox) / nb.s, uy - (cy - nb.oy) / nb.s, w, h];
+    if (glide) this.glide(next); else { this.stopGlide(); this.setVB(next); }
+  };
+  MapView.prototype.panBy = function (dx, dy) {
+    const s = this.frame(this.vb).s;
+    this.setVB([this.vb[0] - dx / s, this.vb[1] - dy / s, this.vb[2], this.vb[3]]);
+  };
+  MapView.prototype.zoomBy = function (f) { const b = this.svg.getBoundingClientRect(); this.zoomAt(b.left + b.width / 2, b.top + b.height / 2, f, true); };
+  MapView.prototype.fit = function () { this.glide(BASE); };
+  MapView.prototype.resetZoom = function () { this.stopGlide(); this.setVB(BASE); };
+  MapView.prototype.stopGlide = function () { if (this.raf) cancelAnimationFrame(this.raf); this.raf = 0; this.glideTo = null; };
+  MapView.prototype.glide = function (to) {
+    this.stopGlide();
+    // clamp the target first so the glide ends where it will stay
+    const w = clampN(to[2], W / ZMAX, W), h = w * H / W;
+    to = w >= W - 0.5 ? BASE.slice() : [clampN(to[0], 0, W - w), clampN(to[1], 0, H - h), w, h];
+    const from = this.vb.slice(), t0 = performance.now();
+    const still = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const D = still ? 0 : 260;
+    this.glideTo = to;
+    const step = now => {
+      const k = D ? Math.min(1, (now - t0) / D) : 1, e = 1 - Math.pow(1 - k, 3);
+      // the zoom glides evenly (log scale) so it does not rush at the start
+      const wz = from[2] * Math.pow(to[2] / from[2], e);
+      const p = (to[2] === from[2]) ? e : (from[2] - wz) / (from[2] - to[2]);
+      this.setVB([from[0] + (to[0] - from[0]) * p, from[1] + (to[1] - from[1]) * p, wz, wz * H / W]);
+      if (k < 1) this.raf = requestAnimationFrame(step); else { this.raf = 0; this.glideTo = null; this.setVB(to); }
+    };
+    this.raf = requestAnimationFrame(step);
+  };
 
   MapView.prototype.update = function (st, ui) {
     ui = ui || {};
