@@ -53,3 +53,4 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - On a real iPhone (only WebKit at iPhone size, headless).
 - Online with three or more real people, and host hand-over after the host vanishes (module's own tests cover it).
 - Free-quota use of a long online game (estimated, not measured).
+- Live online run 2026-10-20 (49 moves, two headless phones): once a move took over 10 s to show on both phones, then play carried on in sync. Cause not found (network delay or a tap ignored while the previous move was still sending; the app unblocks after 8 s).
