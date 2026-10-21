@@ -112,7 +112,7 @@ for (const s of SIZES) {
   ok(back.fit === false, 'fit button dimmed again');
 
   await tap(page, '#zoomIn'); await page.waitForTimeout(500);
-  await tap(page, (s.touch ? '#tabsBottom' : '#tabsTop') + ' [data-tab="study"]'); await page.waitForTimeout(300);
+  await tap(page, (await page.isVisible('#tabsBottom')) ? '#tabsBottom [data-tab="study"]' : '#tabsTop [data-tab="study"]'); await page.waitForTimeout(300);
   const st = await measure(page);
   ok(same(st.land, auto.land) && st.fit === false, 'tab change returns to auto');
   ok(st.scrollY === 0, 'page did not scroll');

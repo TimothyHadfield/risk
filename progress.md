@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-20 (edge pass).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-21 (visibility pass).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.
@@ -27,6 +27,7 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - "add opptional sounds you can add to the games that reflect what's happening in the game accurately as well as win celebrations, and other fun annimations to go along with everything. Just make sure everything is customizable in the settings so the user can play as preffered." (2026-10-20)
 - "Could you focus on making each game perfect especially in scenarios that the game doesn't expect or are a little weird." (2026-10-20)
 - "could you also make sure that each of the games also have a look to them so that the game (either board or card layout) looks almost identical to how the board or card layout looks like in real life, so it's easy to understand if you've already played it before, and also so it feels more like you're actually playing in real life rather than you're playing it online. Even things like how youre cards or other things are laid out infront of you, make it look like they are actual cards laid out similar to how it looks like in real life. Make the decks look like actual decks. Make the board have the same design as it does in real life with the same layouts. It should look kind of like you're looking through a camera that is connected to a user's glasses that is playing in real life (not actually, but the layout and style of everything should be similar)." (2026-10-20)
+- "for a lot of the games the cards or board layout is too small to easily see what's going on. Some games just need small design imporvements like filling the screen with the board view and fitting the cards and other things in the empty space, some have severe errors like TTR. Fix this so the view of what's happening and where everything is is very clear. Consider parts of the board that are dense in what's happening and if the user can reasonably see it." (2026-10-21)
 - From the briefs: exact classic board, 44-card deck, starting armies by player count, escalating and fixed card values, capital and secret-mission variants, own SVG map; exact battle odds, chain odds, expected losses, continent value; computers at measured strength; seats can be you, computer or online in any mix. $0, no copyrighted art or rulebook text.
 
 ## Measured computer strength (tools/measure.js, 400 games each, 2026-10-19)
@@ -100,6 +101,17 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - Same game in two tabs: the other tab follows each move (`storage` event; new games get `gid`).
 - Crowded seats (5 opponents, many cards or big army totals): rows ran into each other; `fitSeats()` now shows one card back + count, then smaller print.
 Held up: all-computer table, reload in every phase, storage blocked, damaged saves, Back with sheets, 9-card hand, empty deck, long/emoji/blank/duplicate names, double taps (no double moves).
+
+## Visibility pass (2026-10-21)
+- Army pieces scale with the board: drawn at least 17.5 px wide on screen, up to 1.88x (mapview.js `PIECE_PX`/`KMAX`, recomputed on resize; replaces the fixed 1.36x phone boost). Number font 12.5 -> 15 units (3 digits 11.5). Phone 393: pieces 12.8 -> 17.5 px, numbers 6.4 -> 15 px box; 320 px: 10.3 -> 14.3 px; laptop 1280: 20.5 -> 22.5 px.
+- Pieces in crowded spots moved a little apart on their own land (`SPOT` table: Peru/Brazil/Argentina, W. Europe, Egypt/E. Africa, Irkutsk/Mongolia, China/Siam); every pair now 50+ units apart, 0 overlaps at every size (was Irkutsk/Mongolia touching). Links, arrows, names use the same spots (`MapView.POS`).
+- Odds tags: sized to their text, placed on the side of the piece that covers the fewest other pieces/tags, drawn under the pieces (never hide armies).
+- + button zooms on the picked territory when one is picked (zoom to the action); otherwise the middle. Auto-fit unchanged.
+- Laptop: side panel 380 -> 330 px, tighter paddings: board 822x460 (37%) -> 900x504 (44%) at 1280x800, 982x550 -> 1060x594 (48.5%) at 1440x900. Panel tables keep rows on one line. Map names 10.5 units on laptop.
+- Turned phone: tabs move up into the header (no bottom bar), zoom knobs inside the board's corner: board 293x164 (18.5%) -> 375x210 (30.4%).
+- Short phone (320x568): attack box tightened so Roll / Blitz clear your hand (were half hidden with 6 players).
+- Check: serve, then `node tools/vischeck.mjs http://127.0.0.1:<port>/ [webkit|chromium]` (6 players round 12, attack out of Ukraine, 5 sizes, 45 checks; 18 failed on the old build, 0 now in both engines). `tools/zoomcheck.mjs` now taps whichever tab bar is showing.
+- Still small (accepted): hand card names (5.4 px phone; the troop symbol is the readable part), territory names on the phone's whole-board view (~3 px; zoom in), seat-row numbers 10 px with 5 opponents. Shots: scratchpad `vis/risk/before|after`, audit `vis/risk/audit.md`.
 
 ## NOT verified
 - Edge pass: online leave / AFK / host hand-over only through the shared module's tests; two-tab sync while both tabs run computer turns (reasoned: equal versions are ignored).

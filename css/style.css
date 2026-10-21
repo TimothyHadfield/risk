@@ -65,9 +65,9 @@ body.at-table .panel-col { -webkit-mask-image: linear-gradient(to bottom, #000 c
   .tabs-top { display: flex; }
   .tabs-bottom { display: none; }
   /* the table: others across the far side, the board in the middle, you at the near edge; helpers in a slim side panel */
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "seats panel" "board panel" "mine panel"; padding: 10px 18px 0; column-gap: 22px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "seats panel" "board panel" "mine panel"; padding: 8px 12px 0; column-gap: 14px; }
   .seats { grid-area: seats; }
-  .map-col { grid-area: board; min-width: 0; min-height: 0; padding: 10px; container-type: size; display: grid; place-items: center; }
+  .map-col { grid-area: board; min-width: 0; min-height: 0; padding: 7px 6px; container-type: size; display: grid; place-items: center; }
   /* the board keeps its real shape: as big as fits the space, never stretched */
   .map-wrap, body.at-table .map-wrap { width: min(100cqw, 100cqh * 1000 / 560); height: auto; max-height: none; border-radius: 4px; }
   .mine { grid-area: mine; }
@@ -96,7 +96,8 @@ body.at-table .panel-col { -webkit-mask-image: linear-gradient(to bottom, #000 c
 #map .badge circle.face { stroke: rgba(0,0,0,.55); stroke-width: 1.4; transition: fill .35s ease; }
 #map .badge circle.shine { pointer-events: none; }
 #map .badge circle.hit { fill: transparent; stroke: none; pointer-events: all; }
-#map .badge text { font: 800 12.5px system-ui, sans-serif; text-anchor: middle; fill: #fff; pointer-events: none; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: rgba(0,0,0,.35); stroke-width: 1.6px; }
+#map .badge text { font: 800 15px system-ui, sans-serif; text-anchor: middle; fill: #fff; pointer-events: none; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: rgba(0,0,0,.35); stroke-width: 1.6px; }
+#map .badge text.n3 { font-size: 11.5px; letter-spacing: -.04em; }
 #map .badge.dark text { fill: #15171d; stroke: rgba(255,255,255,.35); }
 #map .badge.sel circle.face { stroke: #fff; stroke-width: 3; }
 #map .badge.cap circle.face { stroke: #f7d774; stroke-width: 3.2; stroke-dasharray: 3 2; }
@@ -105,6 +106,7 @@ body.at-table .panel-col { -webkit-mask-image: linear-gradient(to bottom, #000 c
 @keyframes pop { 40% { r: 16px; } }
 #map .names text { font: 700 8.5px system-ui, sans-serif; fill: #2a2015; text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: rgba(250,244,228,.85); stroke-width: 2.2px; opacity: 0; transition: opacity .2s; }
 #map.show-names .names text { opacity: 1; }
+@media (min-width: 900px) { #map .names text { font-size: 10.5px; } }
 #map .tag rect { stroke: rgba(255,255,255,.25); stroke-width: 1; }
 #map .tag text { font: 750 11.5px system-ui, sans-serif; text-anchor: middle; fill: #0f1117; font-variant-numeric: tabular-nums; }
 #map .tags { pointer-events: none; }
@@ -246,6 +248,8 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-
 table.t th { text-align: left; font-weight: 650; color: var(--muted); font-size: 11.5px; padding: 4px 4px; border-bottom: 1px solid var(--line); }
 table.t td { padding: 5px 4px; border-bottom: 1px solid rgba(42,48,66,.6); }
 table.t td.r, table.t th.r { text-align: right; }
+/* laptop side panel: table rows stay on one line */
+@media (min-width: 900px) { .panel-col table.t { font-size: 12.5px; } .panel-col table.t td { white-space: nowrap; } .panel-col table.t th, .panel-col table.t td { padding-left: 3px; padding-right: 3px; } }
 .pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 12px; font-weight: 700; color: #0f1117; }
 
 /* log */
@@ -284,6 +288,11 @@ table.t td.r, table.t th.r { text-align: right; }
 .fx-set .seg button { font-size: 13.5px; padding: 6px 10px; min-height: 34px; }
 /* a turned phone: board on the left between the seats and your hand, helpers in a column on the right */
 @media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
+  /* the tabs move up into the header so the board gets the bar's height */
+  #app { grid-template-rows: var(--head) 1fr; }
+  .tabs-top { display: flex; } .tabs-bottom { display: none; }
+  .tabs-top button { padding: 8px 11px; }
+  .toast { bottom: 14px; }
   main { display: grid; grid-template-columns: minmax(0, 1fr) 270px; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "seats panel" "board panel" "mine panel"; }
   .seats { grid-area: seats; }
   .map-col { grid-area: board; min-width: 0; min-height: 0; padding: 7px; container-type: size; display: grid; place-items: center; }
@@ -291,8 +300,8 @@ table.t td.r, table.t th.r { text-align: right; }
   .mine { grid-area: mine; }
   .panel-col { grid-area: panel; padding: 8px 8px 10px; }
   .phase .head { flex-wrap: wrap; row-gap: 6px; }
-  /* zoom buttons in one column on the table just left of the board, so they hide none of it */
-  .zoom-bar { grid-template-columns: 34px; grid-template-areas: "in" "fit" "out"; left: max(2px, calc(50% - min(100cqw, 100cqh * 1000 / 560) / 2 - 40px)); bottom: calc(50% - min(100cqw, 100cqh * 1000 / 560) * .28); }
+  /* zoom buttons in the board's own bottom-left corner (empty Pacific), as on the upright phone */
+  .zoom-bar { left: calc(50% - min(100cqw, 100cqh * 1000 / 560) / 2 + 5px); bottom: calc(50% - min(100cqw, 100cqh * 1000 / 560) * .28 + 5px); }
   body.at-table { --seats-h: 42px; --mine-h: 66px; }
   .hand { --card-w: 38px; } .decks { --card-w: 27px; }
 }
@@ -302,6 +311,8 @@ table.t td.r, table.t th.r { text-align: right; }
   body.at-table .map-wrap { max-height: calc(100dvh - var(--head) - var(--tabh) - 186px - var(--seats-h) - var(--mine-h)); }
   .hand { --card-w: 36px; } .decks { --card-w: 25px; } .me { width: 62px; }
   .seats { padding-top: 3px; } .seat-row { font-size: 9.5px; }
-  .phase { padding: 9px 10px; } .phase .head { margin-bottom: 5px; }
+  .phase { padding: 7px 10px; } .phase .head { margin-bottom: 3px; }
+  /* the attack box: tighter lines so Roll / Blitz clear your hand */
+  .phase .small { line-height: 1.25; } .phase .odds { row-gap: 0; } .phase .row.small { margin-bottom: 3px !important; }
   body.at-table .panel-col { padding-top: 6px; -webkit-mask-image: none; mask-image: none; }
 }

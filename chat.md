@@ -38,3 +38,9 @@
 - **Asked:** Tim: "Could you focus on making each game perfect especially in scenarios that the game doesn't expect or are a little weird."
 - **Built:** 13 fixes (see progress.md "Edge pass"): wipe-out trade limit, dice check, end screen says how, Threat lens crash, Odds 0 defender, Hint/HQ messages, no setup covers, two-tab sync, crowded seat rows.
 - **Verified:** 48 scenarios; new engine tests failed first then pass; `node --test "tests/*.test.*"` 38 pass + 1 skip; WebKit checks 74 (13 failed on the old build, 0 after) at 6 sizes.
+
+## 2026-10-21 — visibility pass (builder agent)
+- **Asked:** Tim: "for a lot of the games the cards or board layout is too small to easily see what's going on ... Consider parts of the board that are dense in what's happening and if the user can reasonably see it." (full words in progress.md)
+- **Built:** pieces/numbers sized to the board with crowded spots spread apart, odds tags placed beside pieces and under them, + zooms on the picked territory, bigger laptop board (narrower panel), turned phone tabs in the header, tighter attack box on small phones.
+- **Verified:** new `tools/vischeck.mjs` 18 fails on the old build, 0 after (WebKit + Chromium, 5 sizes); `npm test` 38 pass + 1 skip; zoomcheck only the known laptop click-timeout flake (old build too); 35 before/after shots, one reviewer round (study table wrap fixed; hand "collapse" was a mid-animation shot).
+- **Open:** hand card names and phone whole-board territory names still small.

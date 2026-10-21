@@ -108,7 +108,8 @@
   $('#mapWrap').addEventListener('scroll', e => { e.target.scrollTop = 0; e.target.scrollLeft = 0; });
   // one zoom: auto fits the whole board; pinch / wheel / + / - zoom in; the fit button glides back (lit when zoomed)
   view.onZoom = auto => { const f = $('#fitBtn'); f.classList.toggle('lit', !auto); f.setAttribute('aria-pressed', String(!auto)); };
-  $('#zoomIn').addEventListener('click', () => view.zoomBy(1.6));
+  // with a territory picked, + zooms in on it (the action); otherwise on the middle of the board
+  $('#zoomIn').addEventListener('click', () => { if (app.tab === 'play' && app.sel >= 0) view.zoomOn(app.sel, 1.6); else view.zoomBy(1.6); });
   $('#zoomOut').addEventListener('click', () => view.zoomBy(1 / 1.6));
   $('#fitBtn').addEventListener('click', () => view.fit());
 

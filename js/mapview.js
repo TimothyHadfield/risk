@@ -12,6 +12,13 @@
   // the printed board: each continent in its own colour (like the real board); owners show by their armies
   const BOARD = { na: '#e0b648', sa: '#d4683f', eu: '#5d87c2', af: '#b77b47', as: '#7ea558', au: '#9a6cae' };
   const EDGE = { na: '#8a6a17', sa: '#7d3219', eu: '#2b4a78', af: '#6a421f', as: '#3f5e26', au: '#573a66' };
+  // army pieces in the crowded spots sit a little apart (still on their own land) so bigger pieces never touch:
+  // Peru / Brazil / Argentina, Western Europe, Egypt / East Africa, Irkutsk / Mongolia, China / Siam. Every pair is 50+ apart.
+  const SPOT = { 10: [285.6, 407.9], 11: [336.2, 396.8], 12: [290.4, 458.9], 17: [464.7, 221.1], 21: [552.8, 294.2], 22: [568.3, 343.5], 30: [785.5, 166.4], 31: [755.9, 209.7], 34: [761.6, 259.9], 37: [753.1, 310.6] };
+  const POS = G.terr.map((t, i) => (SPOT[i] ? { x: SPOT[i][0], y: SPOT[i][1] } : { x: t.x, y: t.y }));
+  const NEAR = POS.map((t, i) => Math.min(...POS.map((u, j) => (j === i ? 1e9 : Math.hypot(u.x - t.x, u.y - t.y)))));
+  // a small board gets bigger pieces: drawn at least PIECE_PX screen px wide, up to KMAX times the laptop size
+  const PIECE_PX = 17.5, KMAX = 1.88;
 
   function MapView(svg, onTap) {
     this.svg = svg; this.onTap = onTap;
@@ -30,7 +37,7 @@
     // sea lanes / land links
     const links = el('g', { class: 'links' }, svg);
     G.links.forEach(([a, b]) => {
-      const A = G.terr[a], B = G.terr[b];
+      const A = POS[a], B = POS[b];
       if (Math.abs(A.x - B.x) > 500) { // Alaska - Kamchatka: off the edges, round the back of the world
         const [w, e] = A.x < B.x ? [A, B] : [B, A];
         el('line', { x1: w.x, y1: w.y, x2: 0, y2: w.y - 6 }, links);
@@ -66,29 +73,38 @@
     });
     // selection ring + odds labels + army badges
     this.marks = el('g', { class: 'marks' }, svg);
-    this.badges = G.terr.map((t, i) => {
+    // odds tags lie under the pieces, so a tag can never hide anyone's armies
+    this.tags = el('g', { class: 'tags' }, svg);
+    this.badges = POS.map((t, i) => {
       const g = el('g', { class: 'badge', transform: `translate(${t.x},${t.y})`, 'data-t': i }, svg);
-      // a bigger invisible tap area, never past halfway to the next badge
-      const near = Math.min(...G.terr.map((u, j) => (j === i ? 1e9 : Math.hypot(u.x - t.x, u.y - t.y))));
-      el('circle', { r: Math.min(24, near / 2).toFixed(1), class: 'hit' }, g);
+      // a bigger invisible tap area, never past halfway to the next badge (sized again in setScale)
+      const hit = el('circle', { r: Math.min(24, NEAR[i] / 2).toFixed(1), class: 'hit' }, g);
       // the armies standing on it: a plastic piece in the owner's colour with the count on top
       const s = el('g', { class: 'sc' }, g);
       const c = el('circle', { r: 12.5, class: 'face', filter: 'url(#piece)' }, s);
       el('circle', { r: 12.5, class: 'shine', fill: 'url(#shine)' }, s);
-      const tx = el('text', { y: 4.6 }, s);
-      return { g, c, tx, star: null };
+      const tx = el('text', { y: 5.4 }, s);
+      return { g, c, tx, hit, star: null };
     });
     this.names = el('g', { class: 'names' }, svg);
-    G.terr.forEach((t, i) => { const tx = el('text', { x: t.x, y: t.y + 24 }, this.names); tx.textContent = M.T[i].name; });
-    this.tags = el('g', { class: 'tags' }, svg);
-    // phone: the board is drawn at ~0.4x, so numbers and labels get a size boost
-    const mq = root.matchMedia ? root.matchMedia('(max-width: 899px)') : null;
+    this.nameEls = POS.map((t, i) => { const tx = el('text', { x: t.x, y: t.y + 24 }, this.names); tx.textContent = M.T[i].name; return tx; });
+    // a small board (a phone shows it at ~0.4x) gets bigger pieces, numbers and labels so they stay readable
+    this.k = 1;
     const setScale = () => {
-      this.k = mq && mq.matches ? 1.36 : 1;
-      svg.querySelectorAll('.sc').forEach(s => { if (this.k === 1) s.removeAttribute('transform'); else s.setAttribute('transform', `scale(${this.k})`); });
+      const b = svg.getBoundingClientRect(), s = Math.min(b.width / W, b.height / H);
+      if (!(s > 0)) return;
+      const k = +Math.max(1, Math.min(KMAX, PIECE_PX / (25 * s))).toFixed(3);
+      if (k === this.k && this.kSet) return;
+      this.k = k; this.kSet = true;
+      svg.querySelectorAll('.sc').forEach(g => { if (k === 1) g.removeAttribute('transform'); else g.setAttribute('transform', `scale(${k})`); });
+      this.badges.forEach((b, i) => b.hit.setAttribute('r', Math.min(Math.max(24, 12.5 * k + 3), NEAR[i] / 2).toFixed(1)));
+      this.nameEls.forEach((tx, i) => tx.setAttribute('y', (POS[i].y + 12.5 * k + 10).toFixed(1)));
+      if (this.lastUpdate) this.update(this.lastUpdate[0], this.lastUpdate[1]);
     };
+    this.setScale = setScale;
     setScale();
-    if (mq) { if (mq.addEventListener) mq.addEventListener('change', setScale); else if (mq.addListener) mq.addListener(setScale); }
+    if (root.ResizeObserver) new root.ResizeObserver(setScale).observe(svg);
+    root.addEventListener('resize', setScale);
     const hit = e => { const t = e.target.closest('[data-t]'); if (t) this.onTap(+t.getAttribute('data-t')); };
     svg.addEventListener('click', hit);
     this.initZoom();
@@ -166,6 +182,11 @@
   };
   MapView.prototype.zoomBy = function (f) { const b = this.svg.getBoundingClientRect(); this.zoomAt(b.left + b.width / 2, b.top + b.height / 2, f, true); };
   MapView.prototype.fit = function () { this.glide(BASE); };
+  // zoom in with territory t in the middle (the + button while a territory is picked: zoom to the action)
+  MapView.prototype.zoomOn = function (t, f) {
+    const vb = this.glideTo || this.vb, w = clampN(vb[2] / f, W / ZMAX, W), h = w * H / W, p = POS[t];
+    this.glide([p.x - w / 2, p.y - h / 2, w, h]);
+  };
   MapView.prototype.resetZoom = function () { this.stopGlide(); this.setVB(BASE); };
   MapView.prototype.stopGlide = function () { if (this.raf) cancelAnimationFrame(this.raf); this.raf = 0; this.glideTo = null; };
   MapView.prototype.glide = function (to) {
@@ -201,6 +222,7 @@
       const n = st.armies[i];
       if (b.tx.textContent !== String(n)) {
         b.tx.textContent = n;
+        b.tx.classList.toggle('n3', n >= 100);
         if (b.g.dataset.n !== undefined) { b.c.classList.remove('pop'); void b.c.getBBox(); b.c.classList.add('pop'); }
         b.g.dataset.n = n;
       }
@@ -210,23 +232,42 @@
       b.g.classList.toggle('sel', ui.sel === i);
       b.g.classList.toggle('cap', st.players.some(p => p.capital === i));
     }
-    // odds tags over targets
+    // odds tags beside their targets: each goes to the side of its piece where it hides the fewest other pieces
+    this.lastUpdate = [st, ui];
     this.tags.innerHTML = '';
-    if (ui.tags) ui.tags.forEach((txt, t) => {
-      const k = this.k || 1;
-      const g = el('g', { transform: `translate(${G.terr[t].x},${G.terr[t].y - 22 * k})${k === 1 ? '' : ` scale(${k})`}`, class: 'tag' }, this.tags);
-      el('rect', { x: -20, y: -10, width: 40, height: 18, rx: 5, fill: txt.bg || '#0f1117' }, g);
-      const tx = el('text', { y: 4 }, g); tx.textContent = txt.text;
-    });
+    if (ui.tags) {
+      const k = this.k || 1, tk = Math.max(1, k * 0.8), R = 12.5 * k, hh = 9 * tk, placed = [];
+      let hw = 20 * tk;
+      const pieces = POS.filter((p, i) => st.owner[i] >= 0);
+      const cost = (cx, cy) => {
+        let c = 0;
+        pieces.forEach(p => { const dx = Math.max(Math.abs(p.x - cx) - hw, 0), dy = Math.max(Math.abs(p.y - cy) - hh, 0), d = Math.hypot(dx, dy); if (d < R + 1) c += 10 + (R + 1 - d); });
+        placed.forEach(q => { const ox = hw + q[2] + 2 - Math.abs(q[0] - cx), oy = 2 * hh + 2 - Math.abs(q[1] - cy); if (ox > 0 && oy > 0) c += 10 + ox * oy / 20; });
+        if (cx - hw < 0 || cx + hw > W || cy - hh < 0 || cy + hh > H) c += 50;
+        return c;
+      };
+      ui.tags.forEach((txt, t) => {
+        // the tag is just wide enough for its text ("97%", ">99%")
+        const tw = Math.max(30, String(txt.text).length * 7 + 6); hw = tw / 2 * tk;
+        const p = POS[t], up = R + hh + 1, side = R + hw + 1;
+        const spots = [[0, -up], [0, up], [side, 0], [-side, 0], [side * .8, -up * .9], [-side * .8, -up * .9], [side * .8, up * .9], [-side * .8, up * .9], [0, -up - 2 * hh], [0, up + 2 * hh]];
+        let best = null;
+        spots.forEach(([dx, dy], n) => { const c = cost(p.x + dx, p.y + dy) + n * 0.01; if (!best || c < best[0]) best = [c, p.x + dx, p.y + dy]; });
+        placed.push([best[1], best[2], hw]);
+        const g = el('g', { transform: `translate(${best[1].toFixed(1)},${(best[2] + tk).toFixed(1)})${tk === 1 ? '' : ` scale(${tk})`}`, class: 'tag', 'data-t': t }, this.tags);
+        el('rect', { x: -tw / 2, y: -10, width: tw, height: 18, rx: 5, fill: txt.bg || '#0f1117' }, g);
+        const tx = el('text', { y: 4 }, g); tx.textContent = txt.text;
+      });
+    }
     this.marks.innerHTML = '';
     if (ui.arrow) {
-      const [a, b] = ui.arrow, A = G.terr[a], B = G.terr[b];
+      const [a, b] = ui.arrow, A = POS[a], B = POS[b];
       if (Math.abs(A.x - B.x) < 500) el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, class: 'arrow' }, this.marks);
     }
     this.svg.classList.toggle('show-names', !!ui.names);
     this.svg.classList.toggle('ingame', P.length > 0); // owners' colours now carry the map; continent outlines step back
   };
 
-  MapView.BOARD = BOARD; MapView.EDGE = EDGE;
+  MapView.BOARD = BOARD; MapView.EDGE = EDGE; MapView.POS = POS;
   root.MapView = MapView;
 })(window);
