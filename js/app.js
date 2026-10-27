@@ -44,6 +44,9 @@
     Array.isArray(g.owner) && g.owner.length === 42 && Array.isArray(g.armies) && g.armies.length === 42 && typeof g.phase === 'string' &&
     Array.isArray(g.log) && Array.isArray(g.deck) && isObj(g.rules) && Number.isInteger(g.turn) && !!g.players[g.turn];
   if (!okGame(app.game)) app.game = null;
+  // the game's record and replay: drop anything damaged or from another game rather than break the page
+  if (!isObj(app.gm) || !app.game || app.gm.id !== app.game.gid || (app.gm.acc != null && !(isObj(app.gm.acc) && Array.isArray(app.gm.acc.conts)))) app.gm = null;
+  if (!isObj(app.rec) || !app.game || app.rec.id !== app.game.gid || !Array.isArray(app.rec.f) || !app.rec.f.every(f => isObj(f) && typeof f.o === 'string' && f.o.length === 42 && typeof f.a === 'string' && Number.isInteger(f.t))) app.rec = null;
   if (!isObj(app.calc) || !Number.isFinite(app.calc.A) || !Array.isArray(app.calc.D) || !app.calc.D.length || !app.calc.D.every(Number.isFinite)) app.calc = { A: 10, D: [5] };
 
   // ------------------------------------------------------------ tabs
@@ -266,7 +269,7 @@
       app.game = E.apply(app.game, action);
     } catch (e) { bad(e.message); return false; }
     // Undo against the computer: the table before each of your moves (never in the Daily game)
-    if (mine && !(app.gm && app.gm.daily)) { app.undo.push({ g: prev, nf: app.rec ? app.rec.f.length : 0 }); if (app.undo.length > 12) app.undo.shift(); }
+    if (mine && humans() === 1 && !(app.gm && app.gm.daily)) { app.undo.push({ g: prev, nf: app.rec ? app.rec.f.length : 0, acc: app.gm && app.gm.acc ? JSON.stringify(app.gm.acc) : null }); if (app.undo.length > 12) app.undo.shift(); }
     recFrame(app.game, prev);
     gameStats(app.game);
     store.set('risk.game', app.game);
@@ -278,12 +281,12 @@
   function gameStats(g) {
     if (app.net || !g || !window.RiskProfile) return;
     if (!app.gm || app.gm.id !== g.gid) app.gm = { id: g.gid, helped: false, acc: null, recorded: false, daily: null, tutorial: false };
-    const me = soloSeat(g);
+    const me = soloSeat(g), first = g.players.findIndex(p => p.kind === 'human');
     app.gm.acc = RiskProfile.track(app.gm.acc, g, me, CONTINENTS, E);
     if (g.phase === 'over') app.undo = [];
-    if (g.phase === 'over' && !app.gm.recorded && !app.gm.tutorial && window.Profile && me >= 0) {
+    if (g.phase === 'over' && !app.gm.recorded && !app.gm.tutorial && window.Profile && first >= 0) {
       app.gm.recorded = true;
-      const r = RiskProfile.result(g, me, { helped: app.gm.helped, daily: !!app.gm.daily, acc: app.gm.acc });
+      const r = RiskProfile.result(g, me >= 0 ? me : first, { helped: app.gm.helped, daily: !!app.gm.daily, acc: app.gm.acc });
       try { Profile.recordResult(app.gm.daily ? Object.assign(r, { date: app.gm.daily }) : r); } catch (e) { /* stats never break the game */ }
     }
     saveGm(false);
@@ -323,7 +326,7 @@
     if (app.net || !g || g.phase === 'over' || !app.undo.length || (app.gm && app.gm.daily)) return;
     const x = app.undo.pop();
     clearTimeout(tickT);
-    if (app.gm) app.gm.helped = true;
+    if (app.gm) { app.gm.helped = true; if (x.acc) app.gm.acc = JSON.parse(x.acc); }
     if (app.rec && app.rec.id === x.g.gid) app.rec.f.length = Math.min(app.rec.f.length, x.nf);
     app.game = x.g; app.sel = -1; app.to = -1; app.cards = []; app.hint = null;
     if (g.turn !== x.g.turn) app.lastHuman = x.g.turn;
@@ -836,7 +839,7 @@
     const netLine = app.net ? `<span class="small muted">Room ${esc(app.net.code)}${app.net.hostAway ? ' · host away' : ''}</span>` : '';
     return phaseBox(g) + secretLine(g) +
       `<div class="log" id="log">${logH}</div>` +
-      (g.phase !== 'over' ? `<div class="row" style="margin-top:8px"><button class="btn sm ghost" id="quitBtn">${app.net ? 'Leave' : 'New game'}</button>${app.net || (app.gm && app.gm.daily) ? '' : `<button class="btn sm ghost" id="undoBtn" ${app.undo.length ? '' : 'disabled'}>Undo</button>`}<span class="grow"></span>${app.gm && app.gm.daily && app.gm.id === g.gid ? '<span class="small muted">Daily game</span>' : ''}${netLine}<span class="small muted">Round ${g.round}</span></div>` : '');
+      (g.phase !== 'over' ? `<div class="row" style="margin-top:8px"><button class="btn sm ghost" id="quitBtn">${app.net ? 'Leave' : 'New game'}</button>${app.net || (app.gm && app.gm.daily) || humans() > 1 ? '' : `<button class="btn sm ghost" id="undoBtn" ${app.undo.length ? '' : 'disabled'}>Undo</button>`}<span class="grow"></span>${app.gm && app.gm.daily && app.gm.id === g.gid ? '<span class="small muted">Daily game</span>' : ''}${netLine}<span class="small muted">Round ${g.round}</span></div>` : '');
   }
 
   function bindPlay() {
@@ -1129,9 +1132,9 @@
     let n = null; try { n = e.newValue ? JSON.parse(e.newValue) : null; } catch (err) { return; }
     const cur = app.game;
     if (n && !okGame(n)) return;
-    if (!n) { if (!cur) return; clearTimeout(tickT); app.game = null; }
+    if (!n) { if (!cur) return; clearTimeout(tickT); app.game = null; app.undo = []; stopReplay(); }
     else if (cur && n.gid === cur.gid && (n.ver || 0) <= (cur.ver || 0)) return; // same game, nothing newer
-    else { app.game = n; if (!cur || n.gid !== cur.gid) view.resetZoom(); }
+    else { app.game = n; if (!cur || n.gid !== cur.gid) { view.resetZoom(); app.undo = []; stopReplay(); } }
     app.sel = -1; app.to = -1; app.cards = []; app.hint = null;
     document.querySelectorAll('.cover').forEach(c => c.remove());
     app.lastHuman = app.game && humans() > 1 ? -2 : -1;

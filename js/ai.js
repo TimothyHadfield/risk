@@ -118,6 +118,8 @@
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     st.players.forEach((q, i) => { if (i !== p && Array.isArray(q.cards)) q.cards = pool.splice(0, q.cards.length); });
     st.deck = pool;
+    // other players' secret missions are unknown too: the look-ahead plays them without one
+    st.players.forEach((q, i) => { if (i !== p && q.mission) q.mission = null; });
     return st;
   }
   function lookPlace(st, p) {
