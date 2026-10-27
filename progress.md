@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-27 (improve pass: names, Hard, kits, Undo, replay).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-27 (follow-up: ending a game vs computers after your first move (End game, new game, Daily, Basic Training) counts as a loss in My stats, `abandonGame()` + `app.gm.moved`; never for Basic Training, pass-and-play or online; a Daily counts from the start as before; the Start over sheet says "This game ends and counts as a loss." when it will (wording not Tim's, flagged); `tests/quit.browser.mjs` (WebKit 393, in `npm test`, seen failing on the old build); build 14. Before that, improve pass: names, Hard, kits, Undo, replay).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.

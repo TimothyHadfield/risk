@@ -4,7 +4,7 @@
   "description": "Build-time only: tools/buildgeo.mjs draws js/geo.js from Natural Earth (public domain). Nothing here is loaded by the site.",
   "scripts": {
     "geo": "node tools/buildgeo.mjs",
-    "test": "node --test \"tests/*.test.*\""
+    "test": "node --test \"tests/*.test.*\" && node tests/quit.browser.mjs"
   },
   "devDependencies": {
     "d3-geo": "3.1.1",

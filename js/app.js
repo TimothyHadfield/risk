@@ -272,6 +272,7 @@
     if (mine && humans() === 1 && !(app.gm && app.gm.daily)) { app.undo.push({ g: prev, nf: app.rec ? app.rec.f.length : 0, acc: app.gm && app.gm.acc ? JSON.stringify(app.gm.acc) : null }); if (app.undo.length > 12) app.undo.shift(); }
     recFrame(app.game, prev);
     gameStats(app.game);
+    if (mine && app.gm && !app.gm.moved) { app.gm.moved = true; saveGm(false); }   // from your first move, leaving counts as a loss
     store.set('risk.game', app.game);
     return true;
   }
@@ -304,13 +305,21 @@
     const fr = app.rec.f[i], g = app.game;
     return Object.assign({}, g, { owner: fr.o.split('').map(c => +c - 1), armies: fr.a.split(',').map(Number), turn: fr.t, round: fr.r, phase: 'replay', lastRoll: null });
   };
-  // leaving an unfinished Daily game (new game, another Daily) counts it as lost, so it can't be retried
-  function abandonDaily() {
+  // leaving an unfinished game against the computers (End game, new game, Daily, guided game) counts it as lost,
+  // so a bad game can't be dropped (and a Daily can't be retried). Not the guided game, pass-and-play, online,
+  // or a game you haven't made a move in yet (a Daily counts from the start, as before).
+  function abandonGame() {
     const m = app.gm, g = app.game;
-    if (!window.Profile || !m || !m.daily || m.recorded || !g || g.phase === 'over' || m.id !== g.gid) return;
+    if (app.net || !window.Profile || !window.RiskProfile || !m || m.recorded || m.tutorial || !g || g.phase === 'over' || m.id !== g.gid) return;
+    if (!m.moved && !m.daily) return;
+    const me = soloSeat(g);
+    if (me < 0) return;
+    const r = RiskProfile.result(g, me, { helped: m.helped, daily: !!m.daily, acc: m.acc });
+    if (r.mode === 'friends') return;
     m.recorded = true; saveGm();
-    try { Profile.recordResult({ mode: m.helped ? 'help' : 'computer', level: m.helped ? null : 'hard', won: false, daily: true, date: m.daily }); } catch (e) { /* ignore */ }
-    toast('Daily game left: counted as a loss');
+    r.won = false; r.extra.quit = true;
+    try { Profile.recordResult(m.daily ? Object.assign(r, { date: m.daily }) : r); } catch (e) { /* stats never break the game */ }
+    toast((m.daily ? 'Daily game' : 'Game') + ' left: counted as a loss');
   }
   // starting the Daily or the guided game over an unfinished game: the first tap only warns
   let leaveAsk = 0;
@@ -320,7 +329,7 @@
     toast('Tap again to leave your game in progress');
     return false;
   }
-  function endGame() { abandonDaily(); clearTimeout(tickT); stopReplay(); app.game = null; app.undo = []; store.del('risk.game'); render(); offerTutorial(); }
+  function endGame() { abandonGame(); clearTimeout(tickT); stopReplay(); app.game = null; app.undo = []; store.del('risk.game'); render(); offerTutorial(); }
   function undo() {
     const g = app.game;
     if (app.net || !g || g.phase === 'over' || !app.undo.length || (app.gm && app.gm.daily)) return;
@@ -718,7 +727,7 @@
   }
   // a new local game; opts: { seed, tutorial, daily: 'YYYY-MM-DD' } (Daily and Basic Training use the standard rules)
   function startLocal(seats, rules, opts) {
-    abandonDaily(); stopReplay();
+    abandonGame(); stopReplay();
     closeSheet(); if (window.COACH) COACH.closeOffer();
     const R = opts.seed ? Object.assign({}, E.DEFAULT_RULES, rules) : rules;
     seats = seats.map((s, i) => Object.assign({}, s, { name: s.name || E.COLORS[i].name + ' ' + s.level[0].toUpperCase() }));
@@ -855,7 +864,7 @@
     if (!app.net) on('againBtn', endGame);
     if (!app.net) on('replayBtn', () => { app.rp = 0; render(); });
     if (!app.net) on('undoBtn', undo);
-    if (!app.net) on('quitBtn', () => openSheet(`<div class="h">Start over?</div><div class="muted" style="margin:6px 0 12px">${app.gm && app.gm.daily && app.gm.id === g.gid ? 'Leaving the Daily game counts as a loss.' : 'This game ends.'}</div><button class="btn warm block" id="quitYes">End game</button>`, s => s.querySelector('#quitYes').addEventListener('click', () => { closeSheet(); endGame(); })));
+    if (!app.net) on('quitBtn', () => openSheet(`<div class="h">Start over?</div><div class="muted" style="margin:6px 0 12px">${app.gm && app.gm.daily && app.gm.id === g.gid ? 'Leaving the Daily game counts as a loss.' : app.gm && app.gm.moved && !app.gm.tutorial && app.gm.id === g.gid && soloSeat(g) >= 0 ? 'This game ends and counts as a loss.' : 'This game ends.'}</div><button class="btn warm block" id="quitYes">End game</button>`, s => s.querySelector('#quitYes').addEventListener('click', () => { closeSheet(); endGame(); })));
     document.querySelectorAll('[data-auto]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.auto === 'one') { act(AI.choose(app.game, app.game.turn)); afterAct(); return; }
       // only this person's setup: the Hard computer picks for them; other people still pick their own
