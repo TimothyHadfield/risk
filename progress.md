@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-21 (visibility pass).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-27 (improve pass: names, Hard, kits, Undo, replay).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.
@@ -19,6 +19,8 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 | Study: lenses, luck, timeline, forecast | done |
 | Sounds, celebrations, effects (shared `js/fx.js` 1.0.3 + `js/fxrisk.js`), Settings > Sound & effects | done 2026-10-20 |
 | Real-table look (shared `css/table.css` + `js/table.js` kit, copies of `../_table/`) | done 2026-10-20 |
+| Basic Training guided game + rules sheet (`_coach` kit, `js/tutorial.js`), My stats / achievements / Daily game (`_profile` kit, `js/profile-risk.js`), home-screen install + offline (`_pwa` kit, `sw.js`, `js/pwa.js`, `tests/pwa-check.json`) | done 2026-10-27 |
+| Undo against the computer (one person vs computers only, never in the Daily), end-of-game replay (one frame per turn, scrubber) | done 2026-10-27 |
 
 ## Standing instructions (Tim's words)
 - "add risk, clue, battleship, connect four, stratego, clue, checkers, pandemic, splendor, king of tokyo, 7 wonders, and evolution to the list of games."
@@ -30,8 +32,8 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - "for a lot of the games the cards or board layout is too small to easily see what's going on. Some games just need small design imporvements like filling the screen with the board view and fitting the cards and other things in the empty space, some have severe errors like TTR. Fix this so the view of what's happening and where everything is is very clear. Consider parts of the board that are dense in what's happening and if the user can reasonably see it." (2026-10-21)
 - From the briefs: exact classic board, 44-card deck, starting armies by player count, escalating and fixed card values, capital and secret-mission variants, own SVG map; exact battle odds, chain odds, expected losses, continent value; computers at measured strength; seats can be you, computer or online in any mix. $0, no copyrighted art or rulebook text.
 
-## Measured computer strength (tools/measure.js, 400 games each, 2026-10-19)
-3 players Hard/Medium/Easy: 63% / 37% / 1%. Hard vs two Medium: Hard 42% (fair share 33%). 2p Hard vs Medium 57-43, Hard vs Easy 99-1, Medium vs Easy 98-2.
+## Measured computer strength (tools/measure.js, 400 games each, 2026-10-27, after the Hard look-ahead)
+3 players Hard/Medium/Easy: 78% / 22% / 0%. Hard vs two Medium: Hard 56% (fair share 33%). 2p Hard vs Medium 73-27, Hard vs Easy 99-1, Medium vs Easy 98-2. (Before, 2026-10-19: 63/37/1, 42%, 57-43.) Ran as 5 parallel `node` processes (`measure.js` alone took over an hour).
 
 ## Traps
 - Ports 8731 etc. are used by other game agents; this project was served on 18947 (`scratchpad/serve.js`).
@@ -111,9 +113,22 @@ Held up: all-computer table, reload in every phase, storage blocked, damaged sav
 - Turned phone: tabs move up into the header (no bottom bar), zoom knobs inside the board's corner: board 293x164 (18.5%) -> 375x210 (30.4%).
 - Short phone (320x568): attack box tightened so Roll / Blitz clear your hand (were half hidden with 6 players).
 - Check: serve, then `node tools/vischeck.mjs http://127.0.0.1:<port>/ [webkit|chromium]` (6 players round 12, attack out of Ukraine, 5 sizes, 45 checks; 18 failed on the old build, 0 now in both engines). `tools/zoomcheck.mjs` now taps whichever tab bar is showing.
-- Still small (accepted): hand card names (5.4 px phone; the troop symbol is the readable part), territory names on the phone's whole-board view (~3 px; zoom in), seat-row numbers 10 px with 5 opponents. Shots: scratchpad `vis/risk/before|after`, audit `vis/risk/audit.md`.
+- Still small (accepted): hand card names (5.4 px phone; the troop symbol is the readable part), territory names on the phone's whole-board view (~3 px; zoom in; fixed 2026-10-27), seat-row numbers 10 px with 5 opponents. Shots: scratchpad `vis/risk/before|after`, audit `vis/risk/audit.md`.
+
+## Improve pass (2026-10-27)
+- Names readable on the phone: 10 px on screen (11 on laptop), was ~3 px and hidden in play. `mapview.js layoutNames()`: greedy, collision-free (pieces hard, bonus boxes/odds tags soft), attacker + target always named (ring search + leader line if crowded), targets when free, all names when zoomed >= 1.8x or the setting is on. Short forms on a phone's whole-board view (`MapView.SHORT`: W. US, N. Europe, C. America...). vischeck adds 2 checks per size (failed on the old build at all 5 sizes, pass now in WebKit + Chromium). Tap any territory when it's not your move: its name toasts.
+- Hard computer: before placing its armies it plays each of ~4-6 choices forward 6 times (`ai.js lookPlace`, `H.roll`), redealing the hidden cards and dropping others' secret missions. Hard vs Medium 2p 57% -> 72% (300 games). Think time on the laptop: median 18-34 ms, max 217 ms (4 players). `{ fast: true }` skips it (forecast uses that).
+- Bug fixed: on the Odds tab, a map tap fell through to the Play tab (a comment had swallowed `store/render/return`).
+- Army slide: each attack sends a piece in the attacker's colour charging toward the defender; moving in / end-of-turn move slides one across (`fxrisk.js slide`, off with Animations or reduced motion). Test watched failing first.
+- Laptop: the game log fills the side column (was an empty band below it).
+- Kits copied byte-identical (checked with cmp). Profile levels: Easy 1000, Medium 1400 (capped step; measured 98%), Hard 1560 (72%). Daily game: you vs two Hard, standard rules, today's seed. Games with Hint or Undo count "with help".
+- Tests: `tests/profile.test.js` (4, failed on the old build), fx slide test; PWA `node tools/pwa-check.mjs` 18/18 in Chromium; WebKit 18/18 earlier, then 13/18 for Risk and for Checkers alike (offline cold open serves the "Offline" page in WebKit on this laptop: environment, not this game).
+- Kit flow check: scratchpad `improve/risk/kits.mjs` (offer, Basic Training steps, Undo, Rules, Daily, play to the end, replay scrub, My stats, no errors) 14/14 at 393 px.
+- Reviewer findings fixed: Undo leaked the last player's hand in pass-and-play (now one person only), pass-and-play games weren't recorded, Undo kept achievement progress, tab-swapped game kept Undo/replay, damaged `risk.gm`/`risk.rec` could wipe the game (now validated), look-ahead knew secret missions.
+- Rules variants: already 5/5 with rivals on base options (setup, card values, +2, move, missions, capitals). Fog of war / blizzards are not base Risk: skipped.
 
 ## NOT verified
+- Improve pass: real iPhone; Hard's think time on a real phone (laptop max 217 ms); the guided game played start to finish by a person (steps checked headless through the first attack); "Move armies" tutorial step layout (reasoned same as the measured "New armies" one); Hard's strength in Missions mode after dropping others' missions from its look-ahead.
 - Edge pass: online leave / AFK / host hand-over only through the shared module's tests; two-tab sync while both tabs run computer turns (reasoned: equal versions are ignored).
 - The table look on a real iPhone; real card size feel (reasoned); the card flip on a real device.
 - Sounds by ear on a real iPhone (headless WebKit on Windows has no Web Audio; sound tested with a fake AudioContext only). Confetti in headless WebKit runs at a low frame rate, so screenshots show it early.

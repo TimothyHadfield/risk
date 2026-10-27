@@ -44,3 +44,9 @@
 - **Built:** pieces/numbers sized to the board with crowded spots spread apart, odds tags placed beside pieces and under them, + zooms on the picked territory, bigger laptop board (narrower panel), turned phone tabs in the header, tighter attack box on small phones.
 - **Verified:** new `tools/vischeck.mjs` 18 fails on the old build, 0 after (WebKit + Chromium, 5 sizes); `npm test` 38 pass + 1 skip; zoomcheck only the known laptop click-timeout flake (old build too); 35 before/after shots, one reviewer round (study table wrap fixed; hand "collapse" was a mid-animation shot).
 - **Open:** hand card names and phone whole-board territory names still small.
+
+## 2026-10-27 — improve pass (builder agent, manager brief)
+- **Asked:** per-game improvement pass: fix problems (names readable on the phone), Hard >= 65% vs Medium and a sound ladder, rivals' $0 features (bigger labels, battle animation, Basic Training, Undo, replay), shared kits (_coach, _profile, _pwa, fx re-copy), art/feel, no empty bands.
+- **Built:** name layout (10 px phone), look-ahead Hard (72% vs Medium), Odds-tab tap fix, Basic Training + rules, My stats/achievements/Daily, offline + install, Undo, replay, army slide, laptop log fills the column; reviewer's 6 real findings fixed.
+- **Verified:** `npm test` 43 pass + 1 skip; new tests failed on the old build first (profile, fx slide, vischeck names, PWA 3/18 -> 18/18); vischeck all passed WebKit + Chromium at 5 sizes; kit flow script 14/14; damaged-storage boot check; live phone-view of d280e45 clean.
+- **Open:** see progress.md NOT verified (real iPhone, think time on a phone, WebKit offline cold open flaky on this laptop for every game).
