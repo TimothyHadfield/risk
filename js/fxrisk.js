@@ -28,7 +28,7 @@
     const rolls = st(b, p).rolls - st(a, p).rolls;
     if (rolls > 0) {
       const r = b.lastRoll || null;
-      out.push({ type: 'battle', p, mine, rolls, from: r ? r.from : -1, to: r ? r.to : -1, att: r ? r.att.length : 3, def: r ? r.def.length : 2,
+      out.push({ type: 'battle', p, mine, rolls, hex: hex(p), from: r ? r.from : -1, to: r ? r.to : -1, att: r ? r.att.length : 3, def: r ? r.def.length : 2,
         al: st(b, p).lost - st(a, p).lost, dl: st(b, p).won - st(a, p).won, attHit: !!r && r.al > 0 && r.dl === 0 });
     }
 
@@ -36,14 +36,14 @@
     const moved = new Set();
     if (a.phase === 'occupy' && a.occupy && b.owner[a.occupy.to] === p) {
       const n = b.armies[a.occupy.to] - a.armies[a.occupy.to];
-      if (n > 0) { out.push({ type: 'move', p, mine, from: a.occupy.from, to: a.occupy.to, n }); moved.add(a.occupy.to).add(a.occupy.from); }
+      if (n > 0) { out.push({ type: 'move', p, mine, hex: hex(p), from: a.occupy.from, to: a.occupy.to, n }); moved.add(a.occupy.to).add(a.occupy.from); }
     } else if ((a.phase === 'attack' || a.phase === 'fortify') && rolls === 0) {
       let from = -1, to = -1;
       for (let t = 0; t < a.owner.length; t++) {
         if (a.owner[t] !== p || b.owner[t] !== p) continue;
         if (b.armies[t] < a.armies[t]) from = t; else if (b.armies[t] > a.armies[t]) to = t;
       }
-      if (from >= 0 && to >= 0) { out.push({ type: 'move', p, mine, from, to, n: b.armies[to] - a.armies[to] }); moved.add(from).add(to); }
+      if (from >= 0 && to >= 0) { out.push({ type: 'move', p, mine, hex: hex(p), from, to, n: b.armies[to] - a.armies[to] }); moved.add(from).add(to); }
     }
     const placed = [];
     for (let t = 0; t < a.owner.length; t++) {
@@ -79,7 +79,7 @@
   }
 
   // ---------------------------------------------------------------- play it
-  // env: { FX, at(ms, fn), badge(t), chip(p), cont(ci), panel(), dice(), flood(t, oldHex, ms), stamp(t, hex) }
+  // env: { FX, at(ms, fn), badge(t), chip(p), cont(ci), panel(), dice(), flood(t, oldHex, ms), stamp(t, hex), slide(from, to, hex, ms, lunge) }
   function run(evs, env) {
     if (!evs || !evs.length) return 0;
     const FX = env.FX, s = FX.settings, sp = s.animSpeed === 'fast' ? 0.55 : 1;
@@ -113,6 +113,7 @@
             land = T + 120 + n * 85 + 60;
           }
           if (env.roll) at(T, () => env.roll(land - T)); // the real dice tumble and land as the sound settles
+          if (env.slide && e.from >= 0 && e.to >= 0) at(T, () => env.slide(e.from, e.to, e.hex, Math.max(260, land - T), true)); // the attackers charge across and fall back
           snd(land, 'diceLand', e);
           if (e.from >= 0 && e.al) fl(land + 20, () => env.badge(e.from), '−' + e.al, 'var(--bad)');
           if (e.to >= 0 && e.dl) fl(land + 20, () => env.badge(e.to), '−' + e.dl, 'var(--bad)');
@@ -122,7 +123,8 @@
           T = land + 90 + k * 85; break;
         }
         case 'move':
-          snd(T, 'slide', e); fl(T + 60, () => env.badge(e.to), '+' + e.n, 'var(--good)'); T += 240; break;
+          if (env.slide) at(T, () => env.slide(e.from, e.to, e.hex, 380, false)); // the armies march over
+          snd(T, 'slide', e); fl(T + 300, () => env.badge(e.to), '+' + e.n, 'var(--good)'); T += 400; break;
         case 'conquer':
           env.flood(e.t, e.was, Math.round(T * sp)); // old colour holds, then the new one floods in with the stamp
           snd(T, 'stamp', e); at(T, () => env.stamp(e.t, e.hex)); T += 220; break;
@@ -181,6 +183,32 @@
     const done = () => d.remove(); a.onfinish = done; a.oncancel = done; setTimeout(done, dur + 200);
   }
 
+  // an army piece in the mover's colour travels from one territory's piece to another's (an overlay: nothing
+  // on the board moves). lunge: it charges most of the way, hits and falls back; else it marches all the way.
+  function slide(view, from, to, color, ms, lunge, FX) {
+    if (!animOn(FX)) return;
+    try { if (root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) { /* */ }
+    const A = view.badges[from], B = view.badges[to]; if (!A || !B || !A.c.getBoundingClientRect) return;
+    const ra = A.c.getBoundingClientRect(), rb = B.c.getBoundingClientRect(), m = view.svg.getBoundingClientRect();
+    const ax = ra.left + ra.width / 2, ay = ra.top + ra.height / 2, bx = rb.left + rb.width / 2, by = rb.top + rb.height / 2;
+    const inside = (x, y) => x >= m.left && x <= m.right && y >= m.top && y <= m.bottom;
+    if (!inside(ax, ay) || !inside(bx, by)) return; // zoomed away from it
+    let dx = bx - ax, dy = by - ay;
+    if (Math.abs(dx) > m.width * 0.6) return; // a line across the sea that wraps round the map edge: no flight over the world
+    const s = Math.max(16, Math.min(30, ra.width * 0.9));
+    const d = root.document.createElement('div');
+    d.setAttribute('aria-hidden', 'true');
+    d.style.cssText = `position:fixed;left:${ax - s / 2}px;top:${ay - s / 2}px;width:${s}px;height:${s}px;pointer-events:none;z-index:2147482990;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.45)`;
+    root.document.body.appendChild(d);
+    const dur = ms * speed(FX);
+    const k = lunge ? 0.72 : 1;
+    const frames = lunge
+      ? [{ transform: 'translate(0,0) scale(.7)', opacity: 0 }, { transform: 'translate(0,0) scale(1)', opacity: 1, offset: 0.12 }, { transform: `translate(${dx * k}px,${dy * k}px) scale(1.15)`, opacity: 1, offset: 0.5, easing: 'ease-out' }, { transform: `translate(${dx * 0.2}px,${dy * 0.2}px) scale(.8)`, opacity: 0 }]
+      : [{ transform: 'translate(0,0) scale(.8)', opacity: 0 }, { transform: 'translate(0,0) scale(1)', opacity: 1, offset: 0.15 }, { transform: `translate(${dx}px,${dy}px) scale(1)`, opacity: 1, offset: 0.85 }, { transform: `translate(${dx}px,${dy}px) scale(.6)`, opacity: 0 }];
+    let a; try { a = d.animate(frames, { duration: dur, easing: 'ease-in-out' }); } catch (e) { d.remove(); return; }
+    const done = () => d.remove(); a.onfinish = done; a.oncancel = done; setTimeout(done, dur + 200);
+  }
+
   // Risk's own sounds (synthesised like the rest): one die tumbling to a stop, an army lost
   const FXG = root.FX;
   if (FXG && FXG.define) {
@@ -188,6 +216,6 @@
     FXG.define('thud', k => { k.tone({ f: 105, f2: 52, dur: 0.17, vol: 0.42 }); k.noise({ f: 420, filter: 'lowpass', dur: 0.07, vol: 0.32 }); }, 'moves');
   }
 
-  const api = { events, run, flood, stamp };
+  const api = { events, run, flood, stamp, slide };
   if (node) module.exports = api; else root.RiskFX = api;
 })(typeof window !== 'undefined' ? window : globalThis);

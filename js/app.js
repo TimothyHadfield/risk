@@ -35,6 +35,10 @@
     calc: store.get('risk.calc', { A: 10, D: [5] }),
     history: [],
     net: null, // online room snapshot while in a room
+    gm: store.get('risk.gm', null), // this local game's record: { id, helped, acc, recorded, daily, tutorial }
+    rec: store.get('risk.rec', null), // replay frames, one per turn: { id, f: [{ o, a, t, r }] }
+    undo: [], // the table before each of your recent moves (Undo against the computer)
+    rp: null, // replay: frame shown, or null
   };
   const okGame = g => isObj(g) && g.v === 1 && Array.isArray(g.players) && g.players.length >= 2 && g.players.every(isObj) &&
     Array.isArray(g.owner) && g.owner.length === 42 && Array.isArray(g.armies) && g.armies.length === 42 && typeof g.phase === 'string' &&
@@ -56,12 +60,14 @@
   function goTab(id, push) {
     if (app.tab === id) return;
     if (push !== false) history.pushState({ tab: id }, '', '#' + id);
+    if (window.COACH && id !== 'play') COACH.closeOffer();
     app.tab = id; app.sel = -1; app.to = -1; view.resetZoom(); render();
     $('#panel').scrollTop = 0;
   }
   document.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) goTab(b.dataset.tab); });
   window.addEventListener('popstate', e => {
     if (!$('#sheet').hidden) { closeSheet(true); return; }
+    if (window.COACH && COACH.rulesOpen()) { COACH.closeRules(); history.pushState({ tab: app.tab }, '', '#' + app.tab); return; }
     const id = (e.state && e.state.tab) || (location.hash.slice(1) || 'play');
     goTab(TABS.some(t => t.id === id) ? id : 'play', false);
   });
@@ -88,7 +94,7 @@
     chain: 'Attack the first territory, move everything but one army in, then attack the next from there. Shows the chance to get at least that far.',
     contval: 'Bonus per border is the bonus divided by the territories you must guard. Fewer borders means cheaper to hold.',
     luck: 'Enemy armies your dice killed minus what the dice should kill on average for the same rolls. Positive means lucky dice.',
-    strong: 'Measured by computer-vs-computer games (see below). Hard reads exact odds, values continents and cards, and guards its borders. Medium attacks only with 70%+ odds. Easy attacks on a whim and never moves armies at the end of a turn.',
+    strong: 'Measured by computer-vs-computer games (see below). Hard reads exact odds, values continents and cards, guards its borders, and before placing its armies plays each choice a few turns ahead. Medium attacks only with 70%+ odds. Easy attacks on a whim and never moves armies at the end of a turn.',
     mission: 'Win by finishing this secret task before anyone else. If your target colour is you, or someone else wipes them out, it becomes: hold 24 territories.',
     capital: 'Hold your own headquarters and take every enemy headquarters. Short game: 4 players need 2 enemy HQs, 5 players need 3.',
     threat: 'Red = enemy armies next door outnumber yours there. Green = safe.',
@@ -134,6 +140,7 @@
     dice: () => (app.tab === 'play' ? document.querySelector('#panel .dice') : null),
     flood: (t, hex, ms) => RFX.flood(view, t, hex, ms, FX),
     stamp: (t, hex) => RFX.stamp(view, t, hex, FX),
+    slide: (from, to, hex, ms, lunge) => RFX.slide(view, from, to, hex, ms, lunge, FX),
     // the drawn dice tumble on the table and land on their numbers
     roll: ms => { if (app.tab === 'play') document.querySelectorAll('#panel .dice .tbl-die').forEach((d, i) => TABLE.roll(d, +d.dataset.v, { duration: ms, seed: Date.now() + i * 97 })); },
     cards: (kind, p, n) => cardMotion(kind, p, n),
@@ -252,13 +259,133 @@
       window.RiskNet.act(action).then(r => { if (!r.ok) { unstick(); toast(r.message); } else setTimeout(unstick, 8000); });
       return false;
     }
+    const prev = app.game, mine = isHumanTurn();
     try {
       app.history.push(app.game);
       if (app.history.length > 1) app.history.shift();
       app.game = E.apply(app.game, action);
     } catch (e) { bad(e.message); return false; }
+    // Undo against the computer: the table before each of your moves (never in the Daily game)
+    if (mine && !(app.gm && app.gm.daily)) { app.undo.push({ g: prev, nf: app.rec ? app.rec.f.length : 0 }); if (app.undo.length > 12) app.undo.shift(); }
+    recFrame(app.game, prev);
+    gameStats(app.game);
     store.set('risk.game', app.game);
     return true;
+  }
+  // ------------------------------------------------------------ the game's record: stats, Daily, replay, undo
+  const saveGm = rec => { store.set('risk.gm', app.gm); if (rec !== false) store.set('risk.rec', app.rec); };
+  const soloSeat = g => { const h = g.players.map((p, i) => (p.kind === 'human' ? i : -1)).filter(i => i >= 0); return h.length === 1 ? h[0] : -1; };
+  function gameStats(g) {
+    if (app.net || !g || !window.RiskProfile) return;
+    if (!app.gm || app.gm.id !== g.gid) app.gm = { id: g.gid, helped: false, acc: null, recorded: false, daily: null, tutorial: false };
+    const me = soloSeat(g);
+    app.gm.acc = RiskProfile.track(app.gm.acc, g, me, CONTINENTS, E);
+    if (g.phase === 'over') app.undo = [];
+    if (g.phase === 'over' && !app.gm.recorded && !app.gm.tutorial && window.Profile && me >= 0) {
+      app.gm.recorded = true;
+      const r = RiskProfile.result(g, me, { helped: app.gm.helped, daily: !!app.gm.daily, acc: app.gm.acc });
+      try { Profile.recordResult(app.gm.daily ? Object.assign(r, { date: app.gm.daily }) : r); } catch (e) { /* stats never break the game */ }
+    }
+    saveGm(false);
+  }
+  // one replay frame per turn once setup is over (who holds what, how many armies)
+  function recFrame(g, prev) {
+    if (app.net || !g || SETUP.includes(g.phase)) return;
+    if (!app.rec || app.rec.id !== g.gid) app.rec = { id: g.gid, f: [] };
+    const f = app.rec.f;
+    if (f.length && prev && prev.turn === g.turn && g.phase !== 'over') return;
+    f.push({ o: g.owner.map(o => o + 1).join(''), a: g.armies.join(','), t: g.turn, r: g.round });
+    store.set('risk.rec', app.rec);
+  }
+  const frameState = i => {
+    const fr = app.rec.f[i], g = app.game;
+    return Object.assign({}, g, { owner: fr.o.split('').map(c => +c - 1), armies: fr.a.split(',').map(Number), turn: fr.t, round: fr.r, phase: 'replay', lastRoll: null });
+  };
+  // leaving an unfinished Daily game (new game, another Daily) counts it as lost, so it can't be retried
+  function abandonDaily() {
+    const m = app.gm, g = app.game;
+    if (!window.Profile || !m || !m.daily || m.recorded || !g || g.phase === 'over' || m.id !== g.gid) return;
+    m.recorded = true; saveGm();
+    try { Profile.recordResult({ mode: m.helped ? 'help' : 'computer', level: m.helped ? null : 'hard', won: false, daily: true, date: m.daily }); } catch (e) { /* ignore */ }
+    toast('Daily game left: counted as a loss');
+  }
+  // starting the Daily or the guided game over an unfinished game: the first tap only warns
+  let leaveAsk = 0;
+  function leaveOk() {
+    if (!app.game || app.game.phase === 'over' || Date.now() - leaveAsk < 4000) { leaveAsk = 0; return true; }
+    leaveAsk = Date.now();
+    toast('Tap again to leave your game in progress');
+    return false;
+  }
+  function endGame() { abandonDaily(); clearTimeout(tickT); stopReplay(); app.game = null; app.undo = []; store.del('risk.game'); render(); offerTutorial(); }
+  function undo() {
+    const g = app.game;
+    if (app.net || !g || g.phase === 'over' || !app.undo.length || (app.gm && app.gm.daily)) return;
+    const x = app.undo.pop();
+    clearTimeout(tickT);
+    if (app.gm) app.gm.helped = true;
+    if (app.rec && app.rec.id === x.g.gid) app.rec.f.length = Math.min(app.rec.f.length, x.nf);
+    app.game = x.g; app.sel = -1; app.to = -1; app.cards = []; app.hint = null;
+    if (g.turn !== x.g.turn) app.lastHuman = x.g.turn;
+    store.set('risk.game', app.game); saveGm();
+    fxReset(); render(); tick();
+    toast('Took back your last move');
+    if (window.COACH) COACH.emit('undo');
+  }
+  function startDaily() {
+    if (!window.Profile || !window.RiskProfile) return;
+    const day = Profile.daily.date(), g = app.game;
+    if (app.gm && app.gm.daily === day && g && g.gid === app.gm.id && g.phase !== 'over') { Profile.closePanel(); if (app.tab !== 'play') goTab('play'); return toast('Your Daily game is on the table'); }
+    if (Profile.daily.played(day)) return Profile.openPanel({ tab: 'daily' });
+    if (app.net) { Profile.closePanel(); return toast('Leave the online room first'); }
+    if (!leaveOk()) return;
+    Profile.closePanel();
+    const d = RiskProfile.dailyGame(Profile.daily.seed(day));
+    startLocal(d.seats, d.rules, { seed: d.seed, daily: day });
+    toast('Daily game: you against two Hard computers');
+  }
+  // Basic Training (js/tutorial.js + shared js/coach.js): a fixed deal, you against two Easy computers
+  let tour = null;
+  function startTutorial() {
+    if (!window.COACH || !tour || !window.RiskTutorial) return;
+    if (app.net) return toast('Leave the online room first');
+    if (!leaveOk()) return;
+    const t = RiskTutorial.setup();
+    tour.reset();
+    startLocal(t.seats, t.rules, { seed: t.seed, tutorial: true });
+    tour.start();
+  }
+  function offerTutorial() {
+    if (!window.COACH || !tour || app.tab !== 'play' || app.game || app.net || !$('#sheet').hidden) return;
+    if (tour.seen() || COACH.offered('risk-first')) return;
+    COACH.offer({ id: 'risk-first', title: 'New to Risk?', text: 'Basic Training: a guided first game against two easy computers.', yes: 'Teach me', no: 'No thanks', onYes: () => startTutorial() });
+  }
+  function openRules() { if (window.COACH && window.RiskTutorial) { closeSheet(); COACH.rules(RiskTutorial.rules()); } }
+  // replay of a finished game, turn by turn
+  let rpT = 0;
+  function stopReplay() { clearInterval(rpT); rpT = 0; app.rp = null; }
+  function replayPanel() {
+    const n = app.rec.f.length, i = app.rp, fr = app.rec.f[i], g = app.game, P = g.players[fr.t];
+    const land = g.players.map((p, k) => ({ p, n: fr.o.split('').filter(c => +c - 1 === k).length })).filter(x => x.n > 0);
+    return `<div class="phase"><div class="head"><span class="h">Replay</span><span class="small muted num">Round ${fr.r} · turn ${i + 1} of ${n}</span></div>
+      <div class="small" style="margin-bottom:6px"><b style="color:${P.hex}">${esc(P.name)}</b> to play</div>
+      <input type="range" class="rp-range" id="rpRange" min="0" max="${n - 1}" value="${i}" aria-label="Turn">
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="rpPrev" aria-label="Back">‹</button><button class="btn sm primary grow" id="rpPlay">${rpT ? 'Pause' : 'Play'}</button><button class="btn sm" id="rpNext" aria-label="Forward">›</button><button class="btn sm" id="rpClose">Done</button></div>
+      <div class="row wrap small" style="margin-top:8px">${land.map(x => `<span class="pill" style="background:${x.p.hex}">${esc(x.p.name)} ${x.n}</span>`).join('')}</div></div>`;
+  }
+  function bindReplay() {
+    const n = app.rec.f.length, go = i => { app.rp = Math.max(0, Math.min(n - 1, i)); render(); };
+    const on = (id, f) => { const b = document.getElementById(id); if (b) b.addEventListener('click', f); };
+    on('rpPrev', () => { clearInterval(rpT); rpT = 0; go(app.rp - 1); });
+    on('rpNext', () => { clearInterval(rpT); rpT = 0; go(app.rp + 1); });
+    on('rpClose', () => { stopReplay(); render(); });
+    on('rpPlay', () => {
+      if (rpT) { clearInterval(rpT); rpT = 0; render(); return; }
+      if (app.rp >= n - 1) app.rp = 0;
+      rpT = setInterval(() => { if (app.rp == null || app.rp >= n - 1) { clearInterval(rpT); rpT = 0; render(); return; } go(app.rp + 1); }, DELAY[S.speed] + 220);
+      render();
+    });
+    const r = $('#rpRange'); if (r) r.addEventListener('input', () => { clearInterval(rpT); rpT = 0; go(+r.value); });
   }
   function afterAct() {
     const g = app.game;
@@ -302,9 +429,10 @@
     const g = app.game;
     if (app.tab === 'odds') { // tap a territory to load its armies as the defender
       if (!g) return;
-      app.calc.D[app.calc.D.length - 1] = Math.max(1, g.armies[t]); // unclaimed land has 0: the calculator starts at 1 store.set('risk.calc', app.calc); render(); return;
+      app.calc.D[app.calc.D.length - 1] = Math.max(1, g.armies[t]); // unclaimed land has 0: the calculator starts at 1
+      store.set('risk.calc', app.calc); render(); return;
     }
-    if (!g || !isHumanTurn()) { if (g) toast(T[t].name); return; }
+    if (!g || !isHumanTurn()) { toast(T[t].name); return; }
     if (app.tab !== 'play') goTab('play');
     const me = g.turn;
     switch (g.phase) {
@@ -398,7 +526,8 @@
   const nCards = p => (Array.isArray(p.cards) ? p.cards.length : (p.cards | 0));
   const armiesOf = (g, i) => g.armies.reduce((a, n, t) => a + (g.owner[t] === i ? n : 0), 0);
   function renderTable() {
-    const g = app.game, show = app.tab === 'play' && !!g;
+    const rp = app.rp != null && app.rec && app.rec.f[app.rp]; // replay: the seats show that turn's land and armies
+    const g = rp ? frameState(app.rp) : app.game, show = app.tab === 'play' && !!g;
     $('#seats').hidden = !show; $('#mine').hidden = !show;
     document.body.classList.toggle('at-table', show);
     if (!show) { seatsKey = mineKey = ''; mineFor = -1; return; }
@@ -582,9 +711,20 @@
     if (S.seats.slice(0, S.nPlayers).some(s => s.kind === 'online')) { makeRoom(); return; }
     const n = S.nPlayers;
     const seats = S.seats.slice(0, n).map((s, i) => ({ name: s.kind === 'human' ? (S.seats.slice(0, n).filter(x => x.kind === 'human').length > 1 ? E.COLORS[i].name : 'You') : E.COLORS[i].name + ' ' + s.level[0].toUpperCase(), kind: s.kind, level: s.level }));
-    app.game = E.newGame(seats, S.rules); app.game.gid = Date.now(); view.resetZoom();
-    app.sel = -1; app.to = -1; app.cards = []; app.lastHuman = -1; app.hint = null;
-    store.set('risk.game', app.game);
+    startLocal(seats, S.rules, {});
+  }
+  // a new local game; opts: { seed, tutorial, daily: 'YYYY-MM-DD' } (Daily and Basic Training use the standard rules)
+  function startLocal(seats, rules, opts) {
+    abandonDaily(); stopReplay();
+    closeSheet(); if (window.COACH) COACH.closeOffer();
+    const R = opts.seed ? Object.assign({}, E.DEFAULT_RULES, rules) : rules;
+    seats = seats.map((s, i) => Object.assign({}, s, { name: s.name || E.COLORS[i].name + ' ' + s.level[0].toUpperCase() }));
+    app.game = E.newGame(seats, R, opts.seed); app.game.gid = Date.now(); view.resetZoom();
+    app.sel = -1; app.to = -1; app.cards = []; app.lastHuman = -1; app.hint = null; app.undo = [];
+    app.gm = { id: app.game.gid, helped: !!opts.tutorial, acc: null, recorded: false, daily: opts.daily || null, tutorial: !!opts.tutorial };
+    app.rec = { id: app.game.gid, f: [] };
+    store.set('risk.game', app.game); saveGm();
+    if (app.tab !== 'play') { app.tab = 'play'; history.pushState({ tab: 'play' }, '', '#play'); }
     fxReset(); FX.play('shuffle'); render(); tick();
   }
 
@@ -595,7 +735,7 @@
       const W = g.players[g.winner];
       return `<div class="phase"><div class="cap">Game over</div><div class="big" style="color:${W.hex};margin:4px 0 6px">${W.name === 'You' ? 'You win' : esc(W.name) + ' wins'}</div>
         <div class="small muted">${winHow(g)}${g.round} rounds.</div>${luckTable(g)}${timeline(g)}
-        <div class="row" style="margin-top:10px"><button class="btn primary grow" id="againBtn">New game</button></div></div>`;
+        <div class="row" style="margin-top:10px">${!app.net && app.rec && app.rec.id === g.gid && app.rec.f.length > 1 ? '<button class="btn" id="replayBtn">Replay</button>' : ''}<button class="btn primary grow" id="againBtn">New game</button></div></div>`;
     }
     if (!human) {
       return `<div class="phase"><div class="head"><span class="h" style="color:${P.hex}">${esc(P.name)}</span><span class="small muted">${phaseName(g)}</span></div>
@@ -691,24 +831,28 @@
     const g = app.game;
     if (app.net && !g) return lobbyPanel();
     if (!g) return newGamePanel();
-    const logH = g.log.slice(-6).map(l => `<div>${esc(l)}</div>`).join('');
+    if (app.rp != null && app.rec && app.rec.f[app.rp]) return replayPanel();
+    const logH = g.log.slice(matchMedia('(min-width: 900px)').matches ? -40 : -6).map(l => `<div>${esc(l)}</div>`).join('');
     const netLine = app.net ? `<span class="small muted">Room ${esc(app.net.code)}${app.net.hostAway ? ' · host away' : ''}</span>` : '';
     return phaseBox(g) + secretLine(g) +
       `<div class="log" id="log">${logH}</div>` +
-      (g.phase !== 'over' ? `<div class="row" style="margin-top:8px"><button class="btn sm ghost" id="quitBtn">${app.net ? 'Leave' : 'New game'}</button><span class="grow"></span>${netLine}<span class="small muted">Round ${g.round}</span></div>` : '');
+      (g.phase !== 'over' ? `<div class="row" style="margin-top:8px"><button class="btn sm ghost" id="quitBtn">${app.net ? 'Leave' : 'New game'}</button>${app.net || (app.gm && app.gm.daily) ? '' : `<button class="btn sm ghost" id="undoBtn" ${app.undo.length ? '' : 'disabled'}>Undo</button>`}<span class="grow"></span>${app.gm && app.gm.daily && app.gm.id === g.gid ? '<span class="small muted">Daily game</span>' : ''}${netLine}<span class="small muted">Round ${g.round}</span></div>` : '');
   }
 
   function bindPlay() {
     const g = app.game;
     if (app.net && !g) { bindLobby(); return; }
     if (!g) { bindNewGame(); return; }
+    if (app.rp != null && app.rec && app.rec.f[app.rp]) { bindReplay(); return; }
     const on = (id, f) => { const b = document.getElementById(id); if (b) b.addEventListener('click', f); };
     if (app.net) {
       on('againBtn', leaveRoom);
       on('quitBtn', () => openSheet(`<div class="h">Leave the room?</div><div class="muted" style="margin:6px 0 12px">A computer takes your seat.</div><button class="btn warm block" id="quitYes">Leave</button>`, s => s.querySelector('#quitYes').addEventListener('click', () => { closeSheet(); leaveRoom(); })));
     }
-    if (!app.net) on('againBtn', () => { app.game = null; store.del('risk.game'); render(); });
-    if (!app.net) on('quitBtn', () => openSheet(`<div class="h">Start over?</div><div class="muted" style="margin:6px 0 12px">This game ends.</div><button class="btn warm block" id="quitYes">End game</button>`, s => s.querySelector('#quitYes').addEventListener('click', () => { closeSheet(); clearTimeout(tickT); app.game = null; store.del('risk.game'); render(); })));
+    if (!app.net) on('againBtn', endGame);
+    if (!app.net) on('replayBtn', () => { app.rp = 0; render(); });
+    if (!app.net) on('undoBtn', undo);
+    if (!app.net) on('quitBtn', () => openSheet(`<div class="h">Start over?</div><div class="muted" style="margin:6px 0 12px">${app.gm && app.gm.daily && app.gm.id === g.gid ? 'Leaving the Daily game counts as a loss.' : 'This game ends.'}</div><button class="btn warm block" id="quitYes">End game</button>`, s => s.querySelector('#quitYes').addEventListener('click', () => { closeSheet(); endGame(); })));
     document.querySelectorAll('[data-auto]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.auto === 'one') { act(AI.choose(app.game, app.game.turn)); afterAct(); return; }
       // only this person's setup: the Hard computer picks for them; other people still pick their own
@@ -727,11 +871,13 @@
         const sets = E.findSets(P.cards); sel = sets.sort((a, b) => bonusOf(b) - bonusOf(a))[0];
         app.cards = sel.slice(); render(); return;
       }
-      if (act({ type: 'trade', cards: sel })) { app.cards = []; afterAct(); }
+      const val = E.tradeValue(g, sel);
+      if (act({ type: 'trade', cards: sel })) { if (app.gm && app.gm.acc) { app.gm.acc.trade = Math.max(app.gm.acc.trade || 0, val); saveGm(); } app.cards = []; afterAct(); }
     });
     const bonusOf = s => E.tradeValue(g, s) + (s.some(c => CARDS[c].terr >= 0 && g.owner[CARDS[c].terr] === g.turn) ? 2 : 0) - s.filter(c => CARDS[c].sym === 'W').length;
     on('hintBtn', () => {
       const h = AI.hint(g, g.turn);
+      if (!app.net && app.gm) { app.gm.helped = true; saveGm(); }
       if (g.phase === 'reinforce' && g.mustTrade) { bad('Trade a card set first'); return; }
       if (g.phase === 'reinforce') { app.hint = h.place; render(); toast('Suggested: ' + T[h.place].name); return; }
       const a = h.attacks[0];
@@ -795,7 +941,7 @@
     };
     const stepOne = () => {
       if (!st) fresh();
-      st = E.apply(st, AI.choose(st, st.turn));
+      st = E.apply(st, AI.choose(st, st.turn, { fast: true })); // the quick Hard brain: 40 games must stay quick
       if (st.phase === 'over' || ++k >= 30000) { if (st.winner >= 0) fc.wins[st.winner]++; fc.n++; st = null; }
     };
     const chunk = () => {
@@ -911,10 +1057,13 @@
       <div class="set-row"><label>How strong are the computers? ${why('strong')}</label></div>
     </div>
     <div class="phase" style="margin-top:10px"><div class="head"><span class="h">Sound &amp; effects</span></div><div id="fxBox"></div></div>
+    ${window.COACH && window.RiskTutorial ? `<div class="phase" style="margin-top:10px"><div class="head"><span class="h">Help</span></div><div class="row"><button class="btn grow" id="rulesBtn">Rules</button><button class="btn grow" id="tutBtn">Basic Training</button></div></div>` : ''}
     <div class="small muted" style="margin-top:10px">Risk ${VERSION}. Our own map drawing; rules from the Parker Brothers and Hasbro rulebooks.</div>`;
   }
   function bindSettings() {
     const fb = $('#fxBox'); if (fb) FX.renderSettings(fb);
+    const rb = $('#rulesBtn'); if (rb) rb.addEventListener('click', openRules);
+    const tb = $('#tutBtn'); if (tb) tb.addEventListener('click', startTutorial);
     document.querySelectorAll('[data-rule]').forEach(sg => sg.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => { S.rules[sg.dataset.rule] = b.dataset.v; saveSettings(); render(); })));
     document.querySelectorAll('#speedSeg [data-v]').forEach(b => b.addEventListener('click', () => { S.speed = b.dataset.v; saveSettings(); render(); }));
     document.querySelectorAll('[data-sw]').forEach(i => i.addEventListener('change', () => { if (i.dataset.obj === 'rules') S.rules[i.dataset.sw] = i.checked; else S[i.dataset.sw] = i.checked; saveSettings(); render(); }));
@@ -939,9 +1088,11 @@
     panel.scrollTop = keep;
     const lg = $('#log'); if (lg) lg.scrollTop = lg.scrollHeight;
     renderTable();
-    if (app.game) view.update(drawState(app.game), mapUI());
+    if (app.game && app.rp != null && app.tab === 'play' && app.rec && app.rec.f[app.rp]) view.update(frameState(app.rp), { names: S.names });
+    else if (app.game) view.update(drawState(app.game), mapUI());
     else view.update(blankState(), mapUI());
     fxStep();
+    if (window.COACH) setTimeout(() => COACH.update(), 0); // the guided game follows the table and steps aside under a sheet
   }
   // while HQs are being picked, the map rings only the viewer's own (others are secret until all have chosen)
   function drawState(g) {
@@ -986,5 +1137,35 @@
     app.lastHuman = app.game && humans() > 1 ? -2 : -1;
     fxReset(); render(); tick();
   });
+  // My stats (shared _profile kit, everything stays on this device)
+  if (window.Profile && window.RiskProfile && $('#meBtn')) {
+    const paintMe = () => { $('#meBtn').innerHTML = Profile.avatarSVG(Profile.avatar, 26) + '<span>My stats</span>'; };
+    try {
+      Profile.init({
+        game: 'risk', levels: RiskProfile.LEVELS, achievements: RiskProfile.achievements(),
+        modes: { help: { name: 'Computers, with help' }, friends: { name: 'Pass and play' }, online: { hide: true } },
+        daily: { title: 'Daily game', onPlay: () => startDaily() },
+        onChange: what => { if (what === 'me' || what === 'import') paintMe(); },
+      });
+      paintMe(); $('#meBtn').hidden = false;
+      $('#meBtn').onclick = () => Profile.openPanel();
+    } catch (e) { $('#meBtn').remove(); }
+  } else if ($('#meBtn')) $('#meBtn').remove();
+  // Basic Training: steps follow the game's own state; it steps aside on other tabs and under sheets
+  if (window.COACH && window.RiskTutorial) {
+    const tut = () => !!(app.gm && app.gm.tutorial && app.game && app.game.gid === app.gm.id && !app.net);
+    tour = COACH.tour({
+      id: 'risk-first',
+      steps: RiskTutorial.steps({ game: () => (tut() ? app.game : null), app: () => app }),
+      pauseIf: () => app.tab !== 'play' || !tut() || app.rp != null || !$('#sheet').hidden || !!document.querySelector('.cover') || (window.Profile && Profile.isOpen()),
+    });
+    if (tut() && app.game.phase !== 'over') tour.resume(); // carry on after a reload
+    offerTutorial();
+  }
+  // a new version reloads itself only at a quiet moment: not online, no sheet or rules open, not typing, no game mid-play on screen
+  if (window.PWA) window.PWA.safeToReload = () => !app.net && $('#sheet').hidden && !(window.COACH && COACH.rulesOpen()) && !document.querySelector('.cover') &&
+    !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) &&
+    (!app.game || app.game.phase === 'over' || app.tab === 'odds' || app.tab === 'settings');
   window.__risk = app; // for headless checks
+  window.RiskApp = { app, act, afterAct, onTerritory, isHumanTurn, render: () => render(), goTab, undo, startDaily, startTutorial, openRules, get tour() { return tour; } };
 })();

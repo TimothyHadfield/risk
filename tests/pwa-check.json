@@ -1,0 +1,10 @@
+{
+  "repo": "risk",
+  "ready": "!!(window.RiskApp && document.querySelector('#map path') && (document.querySelector('#startBtn') || window.RiskApp.app.game))",
+  "play": [
+    "(async () => { const w = ms => new Promise(r => setTimeout(r, ms)); const R = RiskApp; if (!R.app.game || R.app.game.phase === 'over') { const s = document.querySelector('#startBtn'); if (s) s.click(); } for (let i = 0; i < 200 && !R.isHumanTurn(); i++) await w(100); const g = R.app.game; window.__verBefore = g.ver || 0; window.__logBefore = g.armies.reduce((a, b) => a + b, 0); const me = g.turn; let t = g.owner.findIndex(o => o < 0); if (g.phase !== 'claim') t = g.owner.findIndex(o => o === me); R.onTerritory(t); })()"
+  ],
+  "played": "(() => { const g = RiskApp.app.game; return !!g && g.armies.reduce((a, b) => a + b, 0) >= window.__logBefore + 2 && RiskApp.isHumanTurn(); })()",
+  "safe": "document.querySelector('#tabsTop [data-tab=settings]').click()",
+  "debug": "JSON.stringify((() => { const g = RiskApp.app.game; return g ? { phase: g.phase, turn: g.turn, log: g.armies.reduce((a, b) => a + b, 0), before: window.__logBefore, human: RiskApp.isHumanTurn() } : null; })())"
+}

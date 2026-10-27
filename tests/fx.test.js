@@ -137,3 +137,18 @@ test('fx: nothing on a fresh game, a reload or a different game', () => {
   const again = E.newGame([{ name: 'You', kind: 'human' }, { name: 'G', kind: 'cpu', level: 'easy' }, { name: 'B', kind: 'cpu', level: 'easy' }], {}, 12);
   assert.deepStrictEqual(RFX.events(st, again, [0]), [], 'New game with the same seats: no sounds for the old board');
 });
+
+test('fx: armies slide from attacker to defender on each attack and on moving in', () => {
+  const { fx, log } = spy();
+  const slides = [];
+  let st = scripted();
+  const step = a => { const nx = E.apply(st, a); const en = env(fx, log, [0]); en.slide = (from, to, hex, ms, lunge) => slides.push({ from, to, hex, lunge }); RFX.run(RFX.events(st, nx, [0]), en); st = nx; };
+  step({ type: 'trade', cards: st.players[0].cards.slice() });
+  step({ type: 'place', t: K.india, n: st.reserve });
+  step({ type: 'attack', from: K.india, to: K.siam, dice: 3 });
+  assert.ok(slides.some(s => s.from === K.india && s.to === K.siam && s.lunge), 'the attack lunges India -> Siam: ' + JSON.stringify(slides));
+  if (st.owner[K.siam] !== 0) step({ type: 'blitz', from: K.india, to: K.siam });
+  if (st.phase === 'occupy') step({ type: 'occupy', n: st.occupy.max });
+  assert.ok(slides.some(s => s.from === K.india && s.to === K.siam && !s.lunge), 'moving in slides armies into Siam');
+  assert.ok(slides.every(s => s.hex === st.players[0].hex), 'in the attacker\'s colour');
+});

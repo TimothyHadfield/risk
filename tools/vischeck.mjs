@@ -81,7 +81,17 @@ for (const s of SIZES) {
     const roll = [...document.querySelectorAll('#panel button')].find(b => /^Roll$/.test(b.textContent.trim()));
     const blitz = [...document.querySelectorAll('#panel button')].find(b => /^Blitz$/.test(b.textContent.trim()));
     const onScreen = e => { if (!e) return false; const r = e.getBoundingClientRect(), mi = document.querySelector('#mine'), mr = mi.getBoundingClientRect(); const covered = !mi.hidden && r.bottom > mr.top + 1 && r.right > mr.left && r.left < mr.right; return r.top >= 0 && r.bottom <= vh + 0.5 && !covered; };
+    // territory names: the attacker's and the target's names show, readable, not on top of each other or a piece
+    const nm = [...document.querySelectorAll('#map .names text')].filter(t => t.classList.contains('on'));
+    const nmBox = nm.map(t => t.getBoundingClientRect());
+    const nmPx = nm.length ? Math.min(...nm.map(t => { const c = t.getScreenCTM(); return parseFloat(getComputedStyle(t).fontSize) * Math.hypot(c.a, c.b); })) : 0;
+    let nmOver = 0, nmOnPiece = 0;
+    nmBox.forEach((a, i) => nmBox.slice(i + 1).forEach(b => { if (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) nmOver++; }));
+    nmBox.forEach(a => pcs.forEach(p => { const cx = Math.max(a.left, Math.min(p.x, a.right)), cy = Math.max(a.top + 2, Math.min(p.y, a.bottom - 2)); if (Math.hypot(cx - p.x, cy - p.y) < p.d / 2 - 1) nmOnPiece++; }));
+    const T = window.RiskMap.T, shown = nm.map(t => t.textContent);
+    const named = [from, to].every(t => shown.includes(T[t].name) || shown.includes((window.MapView.SHORT || [])[t]));
     return {
+      nmPx, nmOver, nmOnPiece, named, nmN: nm.length,
       share: visW * visH / (vw * vh) * 100, aspect: bw / bh, clipped: bw > wrap.width + 1 || bh > wrap.height + 1, wrapBottom: wrap.bottom,
       numPx, piece: Math.min(...pcs.map(p => p.d)), overlaps, tagHides, tags: document.querySelectorAll('#map .tag').length,
       sel: document.querySelector('#map .badge.sel') ? +document.querySelector('#map .badge.sel').dataset.t : -1,
@@ -97,6 +107,8 @@ for (const s of SIZES) {
   ok(m.overlaps === 0, `no pieces overlap (${m.overlaps})`);
   ok(m.tags > 0 && m.tagHides === 0, `odds tags (${m.tags}) and pieces don't cover each other (${m.tagHides})`);
   ok(m.sel === from && m.arrowTo === 1, `taps on the pieces picked ${M.T[from].name} -> ${M.T[to].name}`);
+  ok(m.named && m.nmPx >= 9, `attacker and target named on the map, names ${m.nmPx.toFixed(1)} px (>= 9)`);
+  ok(m.nmOver === 0 && m.nmOnPiece === 0, `names (${m.nmN}) don't overlap each other (${m.nmOver}) or sit on a piece (${m.nmOnPiece})`);
   ok(m.roll && m.blitz, `Roll and Blitz on screen, not under your hand (${m.roll}/${m.blitz})`);
   ok(!m.over && !m.scroll && !errs.length, `no sideways overflow, no page scroll, no errors ${errs.join(' | ')}`);
   await ctx.close();

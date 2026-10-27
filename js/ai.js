@@ -12,7 +12,7 @@
   const { T, ADJ, CONTINENTS, N } = M;
 
   // Hard player's weights (tuned with tools/sim.js; see progress.md)
-  const H = { lossW: 0.18, failW: 1.2, lowCut: 0.5, lowPen: 2, stopDiv: 0, cardV: 1.5, keepGoing: 0, split: true, stack: 0.08, atk: 'hard', plc: 'plan', fort: 'hard', def: 0 };
+  const H = { lossW: 0.18, failW: 1.2, lowCut: 0.5, lowPen: 2, stopDiv: 0, cardV: 1.5, keepGoing: 0, split: true, stack: 0.08, atk: 'hard', plc: 'plan', fort: 'hard', def: 0, neutralV: 1, expo: 1, setup: 'hard', roll: 6, cands: 4, iw: 3, cw: 1, oppW: 1, oppTurns: 2 };
 
   function rng(st, salt) { // deterministic per state, never touches the game seed
     let x = ((st.ver || 0) * 2654435761 + (salt || 0) * 40503 + st.turns * 97 + st.armies.reduce((a, b, i) => a + b * (i + 1), 0)) >>> 0;
@@ -41,14 +41,14 @@
   function targetCont(st, p) { const s = contScores(st, p); return s.indexOf(Math.max(...s)); }
 
   // ---------------------------------------------------------- main
-  function choose(st, seat) {
+  function choose(st, seat, opts) {
     const P = st.players[seat], lvl = P.level || 'medium';
     const r = rng(st, seat + 1);
     switch (st.phase) {
       case 'claim': return { type: 'claim', t: claimPick(st, seat, lvl, r) };
       case 'place': return setupPlace(st, seat, lvl, r);
       case 'capital': return { type: 'capital', t: capitalPick(st, seat) };
-      case 'reinforce': return reinforce(st, seat, lvl, r);
+      case 'reinforce': return reinforce(st, seat, lvl, r, opts && opts.fast);
       case 'occupy': return occupy(st, seat, lvl);
       case 'attack': return attack(st, seat, lvl, r);
       case 'fortify': return fortify(st, seat, lvl, r);
@@ -93,8 +93,76 @@
     return best;
   }
 
+  // hard: try the best few places for this turn's armies, play the turn out (and everyone else's next turn)
+  // a few times with fresh dice, and keep the place that leaves us best off. It never peeks: the rollouts
+  // reshuffle the deck and deal the other players random cards (same counts) from what it cannot see.
+  let inRoll = false;
+  function mixSeed(a, b) { let x = (a * 2654435761 + b * 97 + 12345) >>> 0; x ^= x >>> 16; x = Math.imul(x, 0x45d9f3b) >>> 0; x ^= x >>> 16; return x >>> 0; }
+  function standing(st, p) { // material + income, mine against the average live opponent
+    if (st.phase === 'over') return st.winner === p ? 1e4 : -1e4;
+    const val = i => { let a = 0; for (let t = 0; t < N; t++) if (st.owner[t] === i) a += st.armies[t]; return a + E.income(st, i).total * H.iw + (Array.isArray(st.players[i].cards) ? st.players[i].cards.length : 0) * H.cw; };
+    const opp = E.active(st).filter(i => i !== p);
+    if (!opp.length) return 1e4;
+    if (E.countOwned(st, p) === 0) return -1e4;
+    let o = 0; opp.forEach(i => { o += val(i); });
+    return val(p) - o / opp.length * H.oppW - (opp.length > 1 ? Math.max(...opp.map(val)) * (1 - H.oppW) : 0);
+  }
+  function rolloutFrom(st0, p, k) {
+    const st = JSON.parse(JSON.stringify(st0));
+    st.log = []; st.hist = [];
+    st.seed = mixSeed(st0.ver || 0, k + 1);
+    const r = rng(st, 977 + k);
+    // hidden information: shuffle the unseen cards and deal the other players new hands of the same size
+    const pool = st.deck.slice();
+    st.players.forEach((q, i) => { if (i !== p && Array.isArray(q.cards)) pool.push(...q.cards); });
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    st.players.forEach((q, i) => { if (i !== p && Array.isArray(q.cards)) q.cards = pool.splice(0, q.cards.length); });
+    st.deck = pool;
+    return st;
+  }
+  function lookPlace(st, p) {
+    const mine = E.owned(st, p), tc = targetCont(st, p);
+    const scored = [];
+    mine.forEach(t => {
+      const en = enemyNbrs(st, t); if (!en.length) return;
+      const A = st.armies[t] + st.reserve;
+      let s = 0;
+      en.forEach(u => { const v = O.winP(A, st.armies[u]) * gain(st, p, u, tc) - O.lossP(A, st.armies[u]) * H.lossW; if (v > s) s = v; });
+      let d = 0;
+      CONTINENTS.forEach((c, ci) => { if (E.holdsCont(st, p, ci) && c.borders.includes(t)) d = Math.max(d, threat(st, t) - st.armies[t]); });
+      scored.push({ t, s, d });
+    });
+    if (!scored.length) return mine[0];
+    const cands = scored.slice().sort((a, b) => b.s - a.s).slice(0, H.cands).map(x => x.t);
+    scored.filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 2).forEach(x => { if (!cands.includes(x.t)) cands.push(x.t); });
+    if (cands.length === 1) return cands[0];
+    let best = cands[0], bv = -Infinity;
+    inRoll = true;
+    try {
+      cands.forEach(t => {
+        let sum = 0;
+        for (let k = 0; k < H.roll; k++) {
+          let s = rolloutFrom(st, p, k);
+          s = E.apply(s, { type: 'place', t, n: s.reserve });
+          let steps = 0, left = false, turns = 0, last = p;
+          while (s.phase !== 'over' && steps++ < 400) {
+            if (s.turn !== last) { turns++; last = s.turn; }
+            if (s.turn !== p) left = true; else if (left && s.phase === 'reinforce') break;
+            if (turns > H.oppTurns) break; // with many players: our turn and the next few answers are enough
+            const a = choose(s, s.turn); if (!a) break;
+            try { s = E.apply(s, a); } catch (e) { break; }
+          }
+          sum += standing(s, p);
+        }
+        if (sum > bv) { bv = sum; best = t; }
+      });
+    } finally { inRoll = false; }
+    return best;
+  }
+
   function bestPlace(st, p, lvl, r) {
     if (lvl === 'hard' && H.plc === 'plan' && st.phase === 'reinforce') return planPlace(st, p, st.reserve);
+    if (lvl === 'hard' && H.setup === 'plan' && st.phase === 'place') return planPlace(st, p, st.players[p].pool);
     const mine = E.owned(st, p);
     if (lvl === 'easy') { const b = mine.filter(t => isBorder(st, t)); return pick(r, b.length ? b : mine); }
     const tc = targetCont(st, p);
@@ -107,7 +175,7 @@
       // weakest enemy neighbour we could take
       const weak = Math.min(...en.map(u => st.armies[u]));
       s += 2 / (1 + weak);
-      if (lvl === 'hard' && H.plc === 'hard') {
+      if (lvl === 'hard' && (H.plc === 'hard' || (H.setup === 'hard' && st.phase === 'place'))) {
         // defend a held continent's border under threat
         CONTINENTS.forEach((c, ci) => { if (E.holdsCont(st, p, ci) && c.borders.includes(t)) s += Math.max(0, threat(st, t) - st.armies[t]) * 0.4 + c.bonus * 0.3; });
         s += Math.min(st.armies[t], 12) * H.stack; // build one stack
@@ -130,7 +198,7 @@
     return { type: 'place', t: bestPlace(st, p, lvl, r) };
   }
 
-  function reinforce(st, p, lvl, r) {
+  function reinforce(st, p, lvl, r, fast) {
     const P = st.players[p];
     const sets = st.after === 'attack' && P.cards.length <= 4 ? [] : E.findSets(P.cards); // after a wipe-out: only down to 4 cards
     if (sets.length && (st.mustTrade || lvl !== 'easy')) {
@@ -144,6 +212,7 @@
       });
       return { type: 'trade', cards: best };
     }
+    if (lvl === 'hard' && H.roll > 0 && !inRoll && !fast && !st.after) return { type: 'place', t: lookPlace(st, p), n: st.reserve };
     const t = bestPlace(st, p, lvl, r);
     if (lvl === 'easy') return { type: 'place', t, n: Math.max(1, Math.ceil(st.reserve / 2)) };
     return { type: 'place', t, n: st.reserve };
@@ -185,6 +254,16 @@
       let s = pw * v - O.lossP(A, D) * H.lossW - (1 - pw) * H.failW;
       if (pw < H.lowCut) s -= H.lowPen;
       if (st.captured) s -= H.keepGoing;
+      const dOwn = st.owner[t];
+      if (H.neutralV !== 1 && dOwn >= 0 && st.players[dOwn].kind === 'neutral') {
+        const c = CONTINENTS[T[t].ci], own = c.terrs.filter(u => st.owner[u] === p).length;
+        if (own < c.terrs.length - 1) s -= pw * (v - (st.captured ? 0 : H.cardV)) * (1 - H.neutralV);
+      }
+      if (H.expo) { // what is left in the new land against the enemies next to it
+        const left = Math.max(1, A - 1 - O.battle(A, D).expAttLoss);
+        let th = 0; ADJ[t].forEach(u => { const o = st.owner[u]; if (u !== t && o >= 0 && o !== p && st.players[o].kind !== 'neutral') th += st.armies[u] - 1; });
+        s -= pw * H.expo * Math.max(0, th - left) / 5;
+      }
       // do not strip a held continent's border bare
       CONTINENTS.forEach((c, ci) => { if (E.holdsCont(st, p, ci) && c.borders.includes(f) && enemyNbrs(st, f).length > 1) s -= 0.6; });
       if (s > bs) { bs = s; best = [f, t]; }

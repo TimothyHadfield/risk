@@ -28,6 +28,11 @@ button { cursor: pointer; }
 .tabs-top { display: none; gap: 4px; }
 .tabs-top button { background: none; border: 0; padding: 8px 14px; border-radius: 9px; color: var(--muted); font-weight: 600; }
 .tabs-top button[aria-current="page"] { color: var(--text); background: var(--card); }
+.top .me-btn { flex: none; display: flex; align-items: center; gap: 6px; padding: 3px 9px 3px 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap; margin-left: auto; }
+.top .me-btn:not([hidden]) + .ver { margin-left: 0; }
+.top .me-btn svg { width: 26px; height: 26px; flex: none; }
+@media (max-width: 359px) { .top .me-btn span { display: none; } .top .me-btn { padding: 3px; } }
+.rp-range { width: 100%; accent-color: var(--accent-warm); }
 
 /* ---------- bottom tabs (phone) ---------- */
 .tabs-bottom { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--bg-soft); padding-bottom: env(safe-area-inset-bottom); }
@@ -104,9 +109,11 @@ body.at-table .panel-col { -webkit-mask-image: linear-gradient(to bottom, #000 c
 #map .badge.hidden { opacity: 0; }
 #map .badge circle.pop { animation: pop .35s ease-out; }
 @keyframes pop { 40% { r: 16px; } }
-#map .names text { font: 700 8.5px system-ui, sans-serif; fill: #2a2015; text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: rgba(250,244,228,.85); stroke-width: 2.2px; opacity: 0; transition: opacity .2s; }
-#map.show-names .names text { opacity: 1; }
-@media (min-width: 900px) { #map .names text { font-size: 10.5px; } }
+#map .names text { font: 700 8.5px system-ui, sans-serif; fill: #2a2015; text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: rgba(250,244,228,.9); stroke-width: 2.2px; stroke-linejoin: round; opacity: 0; transition: opacity .2s; }
+/* names are sized and placed by mapview.js layoutNames(): readable on screen, never over a piece */
+#map .names text.on { opacity: 1; }
+#map .names text.focus { fill: #120c05; }
+#map .leads line { stroke: #2a2015; stroke-opacity: .75; stroke-linecap: round; pointer-events: none; }
 #map .tag rect { stroke: rgba(255,255,255,.25); stroke-width: 1; }
 #map .tag text { font: 750 11.5px system-ui, sans-serif; text-anchor: middle; fill: #0f1117; font-variant-numeric: tabular-nums; }
 #map .tags { pointer-events: none; }
@@ -256,6 +263,7 @@ table.t td.r, table.t th.r { text-align: right; }
 /* older lines fade out at the top instead of being sliced in half */
 .log { font-size: 12.5px; color: var(--muted); max-height: 92px; overflow-y: auto; margin-top: 8px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22px); mask-image: linear-gradient(to bottom, transparent, #000 22px); }
 .log div { padding: 1px 0; }
+@media (min-width: 900px) { .log { max-height: min(420px, 42vh); } } /* laptop: the game log fills the side column instead of an empty band */
 .log div:last-child { color: var(--text); }
 
 /* sheet + toast */

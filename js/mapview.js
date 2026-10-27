@@ -64,6 +64,7 @@
     const cl = el('g', { class: 'contlab' }, svg);
     this.contBadges = M.CONTINENTS.map((c, ci) => {
       const [x, y] = G.cont ? G.cont[ci] : CONT_LABEL[c.id];
+      (this.contXY = this.contXY || []).push([x, y]);
       const g = el('g', { transform: `translate(${x},${y})` }, cl);
       const s = el('g', { class: 'sc' }, g);
       // printed on the board: a cream label edged in the continent's colour
@@ -86,20 +87,21 @@
       const tx = el('text', { y: 5.4 }, s);
       return { g, c, tx, hit, star: null };
     });
+    this.leads = el('g', { class: 'leads' }, svg);
     this.names = el('g', { class: 'names' }, svg);
     this.nameEls = POS.map((t, i) => { const tx = el('text', { x: t.x, y: t.y + 24 }, this.names); tx.textContent = M.T[i].name; return tx; });
+    this.nameMode = { all: true, focus: [] };
     // a small board (a phone shows it at ~0.4x) gets bigger pieces, numbers and labels so they stay readable
     this.k = 1;
     const setScale = () => {
       const b = svg.getBoundingClientRect(), s = Math.min(b.width / W, b.height / H);
       if (!(s > 0)) return;
       const k = +Math.max(1, Math.min(KMAX, PIECE_PX / (25 * s))).toFixed(3);
-      if (k === this.k && this.kSet) return;
+      if (k === this.k && this.kSet) { this.layoutNames(); return; }
       this.k = k; this.kSet = true;
       svg.querySelectorAll('.sc').forEach(g => { if (k === 1) g.removeAttribute('transform'); else g.setAttribute('transform', `scale(${k})`); });
       this.badges.forEach((b, i) => b.hit.setAttribute('r', Math.min(Math.max(24, 12.5 * k + 3), NEAR[i] / 2).toFixed(1)));
-      this.nameEls.forEach((tx, i) => tx.setAttribute('y', (POS[i].y + 12.5 * k + 10).toFixed(1)));
-      if (this.lastUpdate) this.update(this.lastUpdate[0], this.lastUpdate[1]);
+      if (this.lastUpdate) this.update(this.lastUpdate[0], this.lastUpdate[1]); else this.layoutNames();
     };
     this.setScale = setScale;
     setScale();
@@ -167,6 +169,87 @@
     this.vb = auto ? BASE.slice() : [clampN(vb[0], 0, W - w), clampN(vb[1], 0, H - h), w, h];
     this.svg.setAttribute('viewBox', this.vb.map(v => +v.toFixed(2)).join(' '));
     if (auto !== this.auto) { this.auto = auto; if (this.onZoom) this.onZoom(auto); }
+    if (this.nameEls) this.layoutNames();
+  };
+
+  // ---- territory names: always drawn at a readable size on screen (NAME_PX), never over the army pieces,
+  // the bonus boxes, the odds tags or each other. A name that has no room is left out (zoom in to see it);
+  // a long name tries its short form first. The territories in play (picked, its targets) are always named.
+  const SHORT = ['Alaska', 'NW Territory', 'Greenland', 'Alberta', 'Ontario', 'Quebec', 'W. US', 'E. US', 'C. America',
+    'Venezuela', 'Peru', 'Brazil', 'Argentina', 'Iceland', 'Britain', 'Scandinavia', 'N. Europe', 'W. Europe', 'S. Europe', 'Ukraine',
+    'N. Africa', 'Egypt', 'E. Africa', 'Congo', 'S. Africa', 'Madagascar', 'Ural', 'Siberia', 'Yakutsk', 'Kamchatka', 'Irkutsk',
+    'Mongolia', 'Japan', 'Afghanistan', 'China', 'Middle East', 'India', 'Siam', 'Indonesia', 'New Guinea', 'W. Australia', 'E. Australia'];
+  const NAME_PX = 10, NAME_PX_BIG = 11, ZOOM_ALL = 1.8;
+  MapView.SHORT = SHORT; MapView.NAME_PX = NAME_PX;
+  MapView.prototype.textW = function (i, short) { // width at font size 10, measured once
+    const key = (short ? 's' : 'f') + i; this.tw = this.tw || {};
+    if (this.tw[key]) return this.tw[key];
+    const s = short ? SHORT[i] : M.T[i].name, tx = this.nameEls[i];
+    let w = 0;
+    try { const old = tx.textContent, fs = tx.style.fontSize; tx.textContent = s; tx.style.fontSize = '10px'; w = tx.getComputedTextLength(); tx.textContent = old; tx.style.fontSize = fs; } catch (e) { w = 0; }
+    if (w > 0) this.tw[key] = w; else w = s.length * 6.1;
+    return w;
+  };
+  MapView.prototype.layoutNames = function () {
+    if (!this.nameEls) return;
+    const b = this.svg.getBoundingClientRect(), vb = this.vb || BASE;
+    const s = Math.min(b.width / vb[2], b.height / vb[3]);
+    if (!(s > 0)) return;
+    const mode = this.nameMode || { all: true, focus: [] };
+    const fu = (b.width >= 600 ? NAME_PX_BIG : NAME_PX) / s; // font size in board units
+    const zoomed = W / vb[2] >= ZOOM_ALL;
+    const all = mode.all || zoomed;
+    const st = this.lastUpdate ? this.lastUpdate[0] : null;
+    const k = this.k || 1, R = 12.5 * k;
+    // what a name may not cover: pieces, bonus boxes, odds tags
+    const block = [], soft = []; // soft: better to cover a bonus box or an odds tag than a piece
+    if (st) POS.forEach((p, i) => { if (st.owner[i] >= 0) block.push([p.x - R, p.y - R, p.x + R, p.y + R]); });
+    (this.contXY || []).forEach(([x, y]) => soft.push([x - 16 * k, y - 11 * k, x + 16 * k, y + 11 * k]));
+    (this.tagBoxes || []).forEach(q => soft.push(q));
+    const placed = [];
+    if (this.leads) this.leads.innerHTML = '';
+    const hits = (bx, list) => list.filter(q => bx[0] < q[2] && bx[2] > q[0] && bx[1] < q[3] && bx[3] > q[1]).length;
+    const view = [vb[0], vb[1], vb[0] + vb[2], vb[1] + vb[3]];
+    // must: the picked territory and the one it acts on; prefer: its possible targets; then the rest, roomiest first
+    const must = new Set(mode.focus || []), prefer = new Set(mode.prefer || []);
+    const rank = i => (must.has(i) ? 2 : prefer.has(i) ? 1 : 0);
+    const order = POS.map((p, i) => i).sort((a, c) => (rank(c) - rank(a)) || (NEAR[c] - NEAR[a]));
+    const pad = fu * 0.12;
+    order.forEach(i => {
+      const tx = this.nameEls[i], p = POS[i], isF = must.has(i), isP = prefer.has(i);
+      const piece = st && st.owner[i] >= 0;
+      let done = null;
+      if (all || isF || isP) {
+        const forms = M.T[i].name.length > 11 ? [false, true] : [false];
+        if (b.width < 600 && M.T[i].name.length > 11 && !zoomed) forms.reverse(); // a whole board on a phone: short first
+        const tries = [];
+        forms.forEach(short => {
+          const w = this.textW(i, short) * fu / 10, sx = R + w / 2 + pad * 2;
+          const spots = piece ? [[0, R + fu * 0.9], [0, -R - fu * 0.3], [sx, fu * 0.35], [-sx, fu * 0.35]] : [[0, fu * 0.35], [0, fu * 1.2], [0, -fu * 0.5]];
+          // a must-name with no room beside its piece moves further out on rings (a thin line points back)
+          if (isF) [1.5, 2.1, 2.8, 3.6, 4.5].forEach(m => { for (let a = 0; a < 16; a++) { const an = Math.PI / 2 + a * Math.PI / 8, rr = R * m + fu * 0.6; spots.push([Math.cos(an) * (rr + w / 2 * Math.abs(Math.cos(an))), Math.sin(an) * rr + fu * 0.35, 1]); } });
+          spots.forEach(([dx, dy, far]) => {
+            const x = p.x + dx, y = p.y + dy;
+            const bx = [x - w / 2 - pad, y - fu * 0.8 - pad, x + w / 2 + pad, y + fu * 0.22 + pad];
+            const out = bx[0] < view[0] || bx[2] > view[2] || bx[1] < view[1] || bx[3] > view[3];
+            tries.push({ x, y, bx, short, far, bad: hits(bx, placed) * 2 + hits(bx, block) + hits(bx, soft) * 0.4 + (out ? 0.5 : 0) });
+          });
+        });
+        done = tries.find(t => t.bad === 0) || (isF ? tries.slice().sort((a, c) => a.bad - c.bad)[0] : null);
+      }
+      if (done) {
+        placed.push(done.bx);
+        const txt = done.short ? SHORT[i] : M.T[i].name;
+        if (tx.textContent !== txt) tx.textContent = txt;
+        tx.setAttribute('x', done.x.toFixed(1)); tx.setAttribute('y', done.y.toFixed(1));
+        tx.style.fontSize = fu.toFixed(2) + 'px'; tx.style.strokeWidth = (fu * 0.26).toFixed(2) + 'px';
+        tx.classList.add('on'); tx.classList.toggle('focus', isF);
+        if (done.far) { // leader from the piece's edge to the nearest point of the name
+          const cx = Math.max(done.bx[0], Math.min(p.x, done.bx[2])), cy = Math.max(done.bx[1], Math.min(p.y, done.bx[3])), d = Math.hypot(cx - p.x, cy - p.y) || 1;
+          el('line', { x1: (p.x + (cx - p.x) * R / d).toFixed(1), y1: (p.y + (cy - p.y) * R / d).toFixed(1), x2: cx.toFixed(1), y2: cy.toFixed(1), 'stroke-width': (fu * 0.14).toFixed(2) }, this.leads);
+        }
+      } else tx.classList.remove('on', 'focus');
+    });
   };
   // zoom by f keeping the board point under the screen point (cx, cy) still
   MapView.prototype.zoomAt = function (cx, cy, f, glide) {
@@ -235,6 +318,7 @@
     // odds tags beside their targets: each goes to the side of its piece where it hides the fewest other pieces
     this.lastUpdate = [st, ui];
     this.tags.innerHTML = '';
+    this.tagBoxes = [];
     if (ui.tags) {
       const k = this.k || 1, tk = Math.max(1, k * 0.8), R = 12.5 * k, hh = 9 * tk, placed = [];
       let hw = 20 * tk;
@@ -254,6 +338,7 @@
         let best = null;
         spots.forEach(([dx, dy], n) => { const c = cost(p.x + dx, p.y + dy) + n * 0.01; if (!best || c < best[0]) best = [c, p.x + dx, p.y + dy]; });
         placed.push([best[1], best[2], hw]);
+        this.tagBoxes.push([best[1] - hw, best[2] - hh, best[1] + hw, best[2] + hh]);
         const g = el('g', { transform: `translate(${best[1].toFixed(1)},${(best[2] + tk).toFixed(1)})${tk === 1 ? '' : ` scale(${tk})`}`, class: 'tag', 'data-t': t }, this.tags);
         el('rect', { x: -tw / 2, y: -10, width: tw, height: 18, rx: 5, fill: txt.bg || '#0f1117' }, g);
         const tx = el('text', { y: 4 }, g); tx.textContent = txt.text;
@@ -266,6 +351,11 @@
     }
     this.svg.classList.toggle('show-names', !!ui.names);
     this.svg.classList.toggle('ingame', P.length > 0); // owners' colours now carry the map; continent outlines step back
+    const focus = new Set();
+    if (ui.sel != null && ui.sel >= 0) focus.add(ui.sel);
+    if (ui.arrow) ui.arrow.forEach(t => focus.add(t));
+    this.nameMode = { all: !!ui.names, focus: [...focus], prefer: ui.targets ? [...ui.targets] : [] };
+    this.layoutNames();
   };
 
   MapView.BOARD = BOARD; MapView.EDGE = EDGE; MapView.POS = POS;
