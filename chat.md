@@ -50,3 +50,9 @@
 - **Built:** name layout (10 px phone), look-ahead Hard (72% vs Medium), Odds-tab tap fix, Basic Training + rules, My stats/achievements/Daily, offline + install, Undo, replay, army slide, laptop log fills the column; reviewer's 6 real findings fixed.
 - **Verified:** `npm test` 43 pass + 1 skip; new tests failed on the old build first (profile, fx slide, vischeck names, PWA 3/18 -> 18/18); vischeck all passed WebKit + Chromium at 5 sizes; kit flow script 14/14; damaged-storage boot check; live phone-view of d280e45 clean.
 - **Open:** see progress.md NOT verified (real iPhone, think time on a phone, WebKit offline cold open flaky on this laptop for every game).
+
+## 2026-10-28 — wave 3 (builder agent, manager brief)
+- **Asked:** Tim: "Just make the games better" (house rules, future risk, YouTube how-to/strategy links, iPhone layout). Brief: a Future board (our own design, 40-50 territories, computers + ladder), house rules off by default, 2-5 verified videos, small fixes.
+- **Built:** Future Earth board (46 territories, 8 regions incl. sea colonies + Moon) with a board registry; house rules (no first-round attacks, many end-of-turn moves, teams of two); Hard values enemy HQs (fixed a Capitals stall); Rules sheet "Future Earth & house rules" + "Videos"; team win counts in My stats.
+- **Verified:** `npm test` 54 pass + quit browser test; new tests seen failing first; ladder numbers in progress.md "Wave 3"; WebKit screenshots at 393, 320, 659x393, 1280, 1440 (no overflow, no errors).
+- **Open:** progress.md NOT verified (Future Earth online, a person playing a team game).

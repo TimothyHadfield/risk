@@ -53,7 +53,9 @@
     const extra = Object.assign({ players: st.players.filter(p => p.kind !== 'neutral').length, rounds: st.round, how: st.how || '' }, opts.acc || {});
     if (humans > 1) return { mode: 'friends', won: null, daily: false, extra };
     const mode = opts.helped ? 'help' : 'computer';
-    return { mode, level: mode === 'computer' ? level : null, won: st.winner === me, daily: !!opts.daily, extra };
+    // teams house rule: the partner of the winner wins too
+    const P = st.players, won = st.winner === me || (st.winner >= 0 && !!P[me] && P[me].team != null && P[me].team === P[st.winner].team);
+    return { mode, level: mode === 'computer' ? level : null, won, daily: !!opts.daily, extra };
   }
 
   const api = { LEVELS, achievements, dailyGame, result, track };

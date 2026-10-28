@@ -40,13 +40,14 @@
     undo: [], // the table before each of your recent moves (Undo against the computer)
     rp: null, // replay: frame shown, or null
   };
+  const boardOf = g => (M.MAPS.some(m => m.id === g.map) ? g.map : 'classic');
   const okGame = g => isObj(g) && g.v === 1 && Array.isArray(g.players) && g.players.length >= 2 && g.players.every(isObj) &&
-    Array.isArray(g.owner) && g.owner.length === 42 && Array.isArray(g.armies) && g.armies.length === 42 && typeof g.phase === 'string' &&
+    Array.isArray(g.owner) && g.owner.length === M.size(boardOf(g)) && Array.isArray(g.armies) && g.armies.length === g.owner.length && typeof g.phase === 'string' &&
     Array.isArray(g.log) && Array.isArray(g.deck) && isObj(g.rules) && Number.isInteger(g.turn) && !!g.players[g.turn];
   if (!okGame(app.game)) app.game = null;
   // the game's record and replay: drop anything damaged or from another game rather than break the page
   if (!isObj(app.gm) || !app.game || app.gm.id !== app.game.gid || (app.gm.acc != null && !(isObj(app.gm.acc) && Array.isArray(app.gm.acc.conts)))) app.gm = null;
-  if (!isObj(app.rec) || !app.game || app.rec.id !== app.game.gid || !Array.isArray(app.rec.f) || !app.rec.f.every(f => isObj(f) && typeof f.o === 'string' && f.o.length === 42 && typeof f.a === 'string' && Number.isInteger(f.t))) app.rec = null;
+  if (!isObj(app.rec) || !app.game || app.rec.id !== app.game.gid || !Array.isArray(app.rec.f) || !app.rec.f.every(f => isObj(f) && typeof f.o === 'string' && f.o.length === app.game.owner.length && typeof f.a === 'string' && Number.isInteger(f.t))) app.rec = null;
   if (!isObj(app.calc) || !Number.isFinite(app.calc.A) || !Array.isArray(app.calc.D) || !app.calc.D.length || !app.calc.D.every(Number.isFinite)) app.calc = { A: 10, D: [5] };
 
   // ------------------------------------------------------------ tabs
@@ -102,6 +103,8 @@
     capital: 'Hold your own headquarters and take every enemy headquarters. Short game: 4 players need 2 enemy HQs, 5 players need 3.',
     threat: 'Red = enemy armies next door outnumber yours there. Green = safe.',
     online: 'Play with friends on their own phones. Set a seat to "Online friend" above and tap Make room, then send them the code. Or type a friend\'s code here and tap Join. The host\'s phone runs the computers; if the host leaves, another player takes over.',
+    noFirst: 'House rule: in the first round everyone only places armies and moves once. Attacks start in round two, so nobody is knocked out before playing.',
+    teams: 'House rule for 4 or 6 players in a World game: partners sit across from each other at the table, never attack each other, and win together.',
     forecast: 'Plays the rest of this game out 40 times from right now with the Hard computer in every seat (new dice each time) and counts who wins. A rough guide to who is ahead, not a promise.',
   };
   document.addEventListener('click', e => {
@@ -220,7 +223,7 @@
   function lensColors() {
     const g = app.game, out = [];
     const me = viewer();
-    for (let t = 0; t < 42; t++) {
+    for (let t = 0; t < T.length; t++) {
       // the board is printed in continent colours; the Owner lens paints each territory in its owner's colour
       if (app.lens === 'owner') out.push(g.owner[t] >= 0 ? g.players[g.owner[t]].hex : '#cfc6b0');
       else if (app.lens === 'cont') out.push(CONTINENTS[T[t].ci].color);
@@ -486,8 +489,9 @@
   };
   const SYM_NAME = { I: 'Infantry', C: 'Cavalry', A: 'Artillery', W: 'Wild' };
   // a territory card laid out like the real ones: name at the top, the territory's shape, the troop symbol below
-  const shapeBox = []; // territory -> viewBox around its outline (measured once from the drawn map)
+  const shapeBox = []; // territory -> viewBox around its outline (measured once from the drawn map; cleared when the board changes)
   function shapeVB(t) {
+    if (shapeBox.board !== M.id) { shapeBox.length = 0; shapeBox.board = M.id; }
     if (!shapeBox[t]) {
       let b = null; try { b = view.paths[t].getBBox(); } catch (e) { /* not drawn yet */ }
       if (!b || !b.width) return '0 0 10 10';
@@ -505,7 +509,7 @@
     const ci = T[c.terr].ci, id = CONTINENTS[ci].id;
     const nm = T[c.terr].name, long = nm.length > 9 || nm.split(' ').some(w => w.length > 7);
     return `<div class="${cls}" data-card="${cid}" role="button" aria-pressed="${!!o.on}" aria-label="${esc(nm)}, ${SYM_NAME[c.sym]}"><span class="rk-nm${long ? ' long' : ''}">${esc(nm)}</span>` +
-      `<svg class="rk-shape" viewBox="${shapeVB(c.terr)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="${window.RiskGeo.terr[c.terr].d}" fill="${window.MapView.BOARD[id]}" stroke="${window.MapView.EDGE[id]}" vector-effect="non-scaling-stroke"/></svg>` +
+      `<svg class="rk-shape" viewBox="${shapeVB(c.terr)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="${M.geo.terr[c.terr].d}" fill="${window.MapView.BOARD[id]}" stroke="${window.MapView.EDGE[id]}" vector-effect="non-scaling-stroke"/></svg>` +
       `<svg class="rk-sym" viewBox="0 0 34 30" aria-hidden="true">${SYM_SVG[c.sym]}</svg></div>`;
   }
   const BACK = 'diamonds'; // the printed back of every Risk card
@@ -616,7 +620,9 @@
       <div class="seg" id="nPl" aria-label="Players">${[2, 3, 4, 5, 6].map(k => `<button aria-pressed="${k === n}" data-n="${k}">${k}${k === 2 ? ' players' : ''}</button>`).join('')}</div>
       <div style="margin-top:6px">${rows}</div>
       ${n === 2 ? '<div class="small muted" style="margin-top:6px">Two players: a neutral army holds 14 territories.</div>' : ''}
-      <div class="seg" id="modeSeg" style="margin-top:8px" aria-label="Goal">${[['classic', 'World'], ['mission', 'Missions'], ['capital', 'Capitals']].map(([k, l]) => `<button aria-pressed="${mode === k}" data-mode="${k}" ${n === 2 && k !== 'classic' ? 'disabled' : ''}>${l}</button>`).join('')}</div>
+      <div class="seg" id="modeSeg" style="margin-top:8px" aria-label="Goal">${[['classic', 'World'], ['mission', 'Missions'], ['capital', 'Capitals']].map(([k, l]) => `<button aria-pressed="${mode === k}" data-mode="${k}" ${(n === 2 && k !== 'classic') || (k === 'mission' && !M.MAPS.find(m => m.id === S.rules.map).missions) ? 'disabled' : ''}>${l}</button>`).join('')}</div>
+      <div class="seg" id="mapSeg" style="margin-top:8px" aria-label="Board">${M.MAPS.map(m => `<button aria-pressed="${S.rules.map === m.id}" data-map="${m.id}">${m.id === 'classic' ? 'Classic map' : m.name}</button>`).join('')}</div>
+      ${S.rules.map !== 'classic' ? `<div class="small muted" style="margin-top:6px">${esc(M.MAPS.find(m => m.id === S.rules.map).blurb)}</div>` : ''}
       <div class="small muted" style="margin-top:8px">More rule choices in Settings.</div>
     </div>
     <div class="phase" style="margin-top:10px">
@@ -628,6 +634,11 @@
   function bindNewGame() {
     document.querySelectorAll('#nPl [data-n]').forEach(b => b.addEventListener('click', () => { S.nPlayers = +b.dataset.n; if (S.nPlayers === 2) S.rules.mode = 'classic'; saveSettings(); render(); }));
     document.querySelectorAll('#modeSeg [data-mode]').forEach(b => b.addEventListener('click', () => { S.rules.mode = b.dataset.mode; saveSettings(); render(); }));
+    document.querySelectorAll('#mapSeg [data-map]').forEach(b => b.addEventListener('click', () => {
+      S.rules.map = b.dataset.map;
+      if (S.rules.mode === 'mission' && !M.MAPS.find(m => m.id === S.rules.map).missions) S.rules.mode = 'classic'; // no missions on this board
+      saveSettings(); render();
+    }));
     document.querySelectorAll('[data-seat]').forEach(sel => sel.addEventListener('change', () => {
       const i = +sel.dataset.seat; S.seats[i] = ['human', 'online'].includes(sel.value) ? { kind: sel.value, level: 'medium' } : { kind: 'cpu', level: sel.value }; saveSettings(); render();
     }));
@@ -745,7 +756,7 @@
     const human = isHumanTurn();
     if (g.phase === 'over') {
       const W = g.players[g.winner];
-      return `<div class="phase"><div class="cap">Game over</div><div class="big" style="color:${W.hex};margin:4px 0 6px">${W.name === 'You' ? 'You win' : esc(W.name) + ' wins'}</div>
+      return `<div class="phase"><div class="cap">Game over</div><div class="big" style="color:${W.hex};margin:4px 0 6px">${W.name === 'You' ? 'You win' : g.how === 'team' && E.teamWon(g, viewer()) ? 'Your team wins' : esc(W.name) + (g.how === 'team' ? ' and partner win' : ' wins')}</div>
         <div class="small muted">${winHow(g)}${g.round} rounds.</div>${luckTable(g)}${timeline(g)}
         <div class="row" style="margin-top:10px">${!app.net && app.rec && app.rec.id === g.gid && app.rec.f.length > 1 ? '<button class="btn" id="replayBtn">Replay</button>' : ''}<button class="btn primary grow" id="againBtn">New game</button></div></div>`;
     }
@@ -807,11 +818,12 @@
           <button class="btn sm" data-mv="max">${o.max}</button><button class="btn primary grow" id="occBtn">Move</button></div></div>`;
       }
       case 'fortify': {
-        let body = `<div class="small muted">${g.rules.fortify === 'adjacent' ? 'One move to a neighbour.' : 'One move along your own land.'} Tap from, then to.</div>`;
+        const many = g.rules.fortify === 'unlimited';
+        let body = `<div class="small muted">${g.rules.fortify === 'adjacent' ? 'One move to a neighbour.' : many ? 'Move as often as you like along your own land.' : 'One move along your own land.'} Tap from, then to.</div>`;
         if (app.sel >= 0 && app.to >= 0) {
           const max = g.armies[app.sel] - 1; if (app.moveN < 1 || app.moveN > max) app.moveN = max;
           body = `<div class="row small" style="margin-bottom:6px"><b>${esc(T[app.sel].name)}</b><span class="muted">→</span><b>${esc(T[app.to].name)}</b></div>
-          <div class="row"><div class="stepper"><button data-step="-1">−</button><output class="num">${app.moveN}</output><button data-step="1">+</button></div><button class="btn primary grow" id="fortBtn">Move &amp; end turn</button></div>`;
+          <div class="row"><div class="stepper"><button data-step="-1">−</button><output class="num">${app.moveN}</output><button data-step="1">+</button></div><button class="btn primary grow" id="fortBtn">${many ? 'Move' : 'Move &amp; end turn'}</button></div>`;
         }
         return `<div class="phase">${head('Move armies')}${body}<div class="row" style="margin-top:10px"><button class="btn block" id="endTurn">End turn</button></div></div>`;
       }
@@ -822,7 +834,7 @@
   function winHow(g) {
     const W = g.players[g.winner];
     if (g.how === 'mission' && W.mission && !W.mission.hidden) return `Mission: ${esc(E.missionText(W.mission))}. `;
-    return ({ world: 'Conquered the world. ', capital: 'Took the headquarters. ', limit: 'Turn limit: most land. ', mission: 'Secret mission done. ' })[g.how] || '';
+    return ({ world: 'Conquered the world. ', team: 'Team win: the partners took the world. ', capital: 'Took the headquarters. ', limit: 'Turn limit: most land. ', mission: 'Secret mission done. ' })[g.how] || '';
   }
   function phaseName(g) { return { claim: 'claiming', place: 'placing', capital: 'choosing HQ', reinforce: 'placing', attack: 'attacking', occupy: 'moving in', fortify: 'moving' }[g.phase] || ''; }
 
@@ -931,9 +943,9 @@
   function timeline(g) {
     const H = g.hist || []; if (H.length < 2) return '';
     const W = 300, Ht = 84, n = H.length;
-    const X = i => 6 + i / (n - 1) * (W - 12), Y = v => Ht - 4 - v / 42 * (Ht - 10);
+    const X = i => 6 + i / (n - 1) * (W - 12), Y = v => Ht - 4 - v / T.length * (Ht - 10);
     const lines = g.players.map((p, i) => `<polyline points="${H.map((h, k) => X(k).toFixed(1) + ',' + Y(h.land[i]).toFixed(1)).join(' ')}" fill="none" stroke="${p.hex}" stroke-width="2" stroke-linejoin="round"/>`).join('');
-    return `<div class="cap" style="margin-top:10px">Land by round</div><svg class="chart" viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="none"><line x1="6" x2="${W - 6}" y1="${Y(21)}" y2="${Y(21)}" stroke="#2a3042" stroke-dasharray="3 3"/>${lines}</svg>`;
+    return `<div class="cap" style="margin-top:10px">Land by round</div><svg class="chart" viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="none"><line x1="6" x2="${W - 6}" y1="${Y(T.length / 2)}" y2="${Y(T.length / 2)}" stroke="#2a3042" stroke-dasharray="3 3"/>${lines}</svg>`;
   }
 
   // who is likely to win from here: play the rest out many times with the computer brains
@@ -1042,7 +1054,7 @@
     }
     return lens + `<div class="phase"><div class="head"><span class="h">Continent value</span>${why('contval')}</div>
       <table class="t"><tr><th>Continent</th><th class="r">Bonus</th><th class="r">Land</th><th class="r">Borders</th><th class="r">Per border</th>${g ? '<th class="r">Held</th>' : ''}</tr>${rows}</table>
-      <div class="small muted" style="margin-top:8px">Australia and South America pay the most per border to guard.</div></div>` + game;
+      ${M.id === 'classic' ? '<div class="small muted" style="margin-top:8px">Australia and South America pay the most per border to guard.</div>' : ''}</div>` + game;
   }
   function bindStudy() {
     document.querySelectorAll('#lensSeg [data-lens]').forEach(b => b.addEventListener('click', () => { app.lens = b.dataset.lens; render(); }));
@@ -1058,9 +1070,11 @@
       <div class="set-row"><label>Setup</label>${seg('setup', [['deal', 'Deal cards'], ['claim', 'Take turns']])}</div>
       <div class="set-row"><label>Card values</label>${seg('cards', [['escalating', '4,6,8…'], ['fixed', 'Fixed'], ['plusone', '+1']])}</div>
       <div class="set-row"><label>+2 on card land</label>${sw('cardBonus', R.cardBonus, 'rules')}</div>
-      <div class="set-row"><label>End-of-turn move</label>${seg('fortify', [['connected', 'Along land'], ['adjacent', 'Next door']])}</div>
+      <div class="set-row"><label>End-of-turn move</label>${seg('fortify', [['connected', 'Along land'], ['adjacent', 'Next door'], ['unlimited', 'Many']])}</div>
       <div class="set-row"><label>Capitals short game ${why('capital')}</label>${sw('capitalShort', R.capitalShort, 'rules')}</div>
       <div class="set-row"><label>12-mission deck</label>${sw('missions12', R.missions12, 'rules')}</div>
+      <div class="set-row"><label>No attacks in round 1 ${why('noFirst')}</label>${sw('noFirstAttack', R.noFirstAttack, 'rules')}</div>
+      <div class="set-row"><label>Teams of two ${why('teams')}</label>${sw('teams', R.teams, 'rules')}</div>
     </div>
     <div class="phase" style="margin-top:10px"><div class="head"><span class="h">Display</span></div>
       <div class="set-row"><label>Computer speed</label><div class="seg" id="speedSeg">${[['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']].map(([v, l]) => `<button aria-pressed="${S.speed === v}" data-v="${v}">${l}</button>`).join('')}</div></div>
@@ -1090,6 +1104,7 @@
 
   // ------------------------------------------------------------ render
   function render() {
+    view.useMap(app.game ? boardOf(app.game) : S.rules.map);
     renderTabs();
     const panel = $('#panel');
     const keep = panel.scrollTop;
@@ -1114,7 +1129,7 @@
   }
   let blank = null;
   function blankState() {
-    if (!blank) { blank = { owner: new Array(42).fill(-1), armies: new Array(42).fill(0), players: [] }; }
+    if (!blank || blank.owner.length !== T.length) { blank = { owner: new Array(T.length).fill(-1), armies: new Array(T.length).fill(0), players: [] }; }
     return blank;
   }
 
