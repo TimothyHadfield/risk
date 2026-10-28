@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-27 (follow-up: ending a game vs computers after your first move (End game, new game, Daily, Basic Training) counts as a loss in My stats, `abandonGame()` + `app.gm.moved`; never for Basic Training, pass-and-play or online; a Daily counts from the start as before; the Start over sheet says "This game ends and counts as a loss." when it will (wording not Tim's, flagged); `tests/quit.browser.mjs` (WebKit 393, in `npm test`, seen failing on the old build); build 14. Before that, improve pass: names, Hard, kits, Undo, replay).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-28 (wave 3: Future Earth board, three house rules, learn videos, Hard values enemy HQs; see "Wave 3" below; build 15). Before that 2026-10-27 (follow-up: ending a game vs computers after your first move (End game, new game, Daily, Basic Training) counts as a loss in My stats, `abandonGame()` + `app.gm.moved`; never for Basic Training, pass-and-play or online; a Daily counts from the start as before; the Start over sheet says "This game ends and counts as a loss." when it will (wording not Tim's, flagged); `tests/quit.browser.mjs` (WebKit 393, in `npm test`, seen failing on the old build); build 14. Before that, improve pass: names, Hard, kits, Undo, replay).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.
@@ -21,6 +21,7 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 | Real-table look (shared `css/table.css` + `js/table.js` kit, copies of `../_table/`) | done 2026-10-20 |
 | Basic Training guided game + rules sheet (`_coach` kit, `js/tutorial.js`), My stats / achievements / Daily game (`_profile` kit, `js/profile-risk.js`), home-screen install + offline (`_pwa` kit, `sw.js`, `js/pwa.js`, `tests/pwa-check.json`) | done 2026-10-27 |
 | Undo against the computer (one person vs computers only, never in the Daily), end-of-game replay (one frame per turn, scrubber) | done 2026-10-27 |
+| Future Earth board, house rules (no first-round attacks, many moves, teams), learn videos | done 2026-10-28, tested |
 
 ## Standing instructions (Tim's words)
 - "add risk, clue, battleship, connect four, stratego, clue, checkers, pandemic, splendor, king of tokyo, 7 wonders, and evolution to the list of games."
@@ -129,7 +130,18 @@ Held up: all-computer table, reload in every phase, storage blocked, damaged sav
 - Reviewer findings fixed: Undo leaked the last player's hand in pass-and-play (now one person only), pass-and-play games weren't recorded, Undo kept achievement progress, tab-swapped game kept Undo/replay, damaged `risk.gm`/`risk.rec` could wipe the game (now validated), look-ahead knew secret missions.
 - Rules variants: already 5/5 with rivals on base options (setup, card values, +2, move, missions, capitals). Fog of war / blizzards are not base Risk: skipped.
 
+## Wave 3 (2026-10-28)
+- Tim: "Just make the games better… variations like common house rules, future risk…, links to youtube videos on strategies/how to play".
+- **Future Earth board** (our own design, picked on the New game panel under the goal; Classic stays default): 46 territories, 8 regions (N. America 5, S. America 2, Europe 4, Africa 3, Asia 7, Oceania 2, Sea Colonies 3, Moon 2), 92 borders, 48 cards. Drowned coasts drawn as shallow water; 4 hex ocean colonies link far coasts; 2 space elevators (Indian Ocean Colony-Tranquility, W. Australia-Shackleton) reach a 3-sector Moon. No secret missions there (Missions button disabled; they name classic continents); Capitals work.
+- `js/map.js` is a board registry: `M.use(id)` refills T/ADJ/CONTINENTS/CARDS/EDGES **in place** (modules keep their destructured arrays; never cache `N`, use `T.length`). `E.apply` and `AI.choose` call `M.use(st.map)`; `render()` calls `view.useMap(...)` (MapView `draw()` redraws). `M.geo` = RiskGeo or RiskGeoFuture. Drawing: `node tools/buildgeo-future.mjs` writes `js/geo-future.js` (148 KB, closest badges 31.6).
+- **House rules** (Settings, off by default, `?` one-liners): No attacks in round 1 (`noFirstAttack`), End-of-turn move "Many" (`fortify:'unlimited'`), Teams of two for 4/6 players in World games (`teams`, partner = seat i % (n/2), `E.ally`/`E.teamWon`; a partner's win counts in My stats).
+- **Hard + Capitals:** Hard now values an enemy HQ (+6 in `gain`); before, 4 Hard on Future Earth stalled 100+ rounds with 2000-army stacks. 6 seeds each board now end in 7-26 rounds.
+- **Videos** (Rules sheet > Videos, new tab, oEmbed 200 + title checked 2026-10-28): Xo8RSozX6Ac Watch It Played how-to, 5g48vXnnf30 Gather Together Games how-to, Ltf7NldY-Nc and fCmvhmxDh6I Legendary Tactics strategy.
+- Future Earth ladder (`node tools/sim.js <games> <players> <mode> future`, full Hard): 2p Hard v Medium 58-22, Hard v Easy 80-0, Medium v Easy 80-0 (80 games each); 3p Capitals H/M/E 48/11/1 of 60 (classic board Capitals 43/17/0); 3p World H/M/E 83/37/0 of 120 (4 hit the turn limit, avg 21.9 rounds; 29 min).
+- Tests: `tests/future.test.js` (10; each seen failing on the old build). Screens: WebKit 393, 320, 659x393, 1280, 1440: no overflow, no errors.
+
 ## NOT verified
+- Wave 3: Future Earth online (rules carry `map`, guests redraw from `st.map`; reasoned, no two-browser run); team games played by a person to the end; Teams with 6 players finished by computers (only 4 tested); Medium/Easy in a Future Capitals game besides the 60-game ladder.
 - Improve pass: real iPhone; Hard's think time on a real phone (laptop max 217 ms); the guided game played start to finish by a person (steps checked headless through the first attack); "Move armies" tutorial step layout (reasoned same as the measured "New armies" one); Hard's strength in Missions mode after dropping others' missions from its look-ahead.
 - Edge pass: online leave / AFK / host hand-over only through the shared module's tests; two-tab sync while both tabs run computer turns (reasoned: equal versions are ignored).
 - The table look on a real iPhone; real card size feel (reasoned); the card flip on a real device.

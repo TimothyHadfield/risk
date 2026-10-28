@@ -7,7 +7,7 @@
   const node = typeof module !== 'undefined' && module.exports;
   const M = node ? require('./map.js') : root.RiskMap;
   const O = node ? require('./odds.js') : root.RiskOdds;
-  const { T, ADJ, CONTINENTS, CARDS, N } = M;
+  const { T, ADJ, CONTINENTS, CARDS } = M; // filled in place when the board changes (M.use)
 
   const COLORS = [
     { id: 'red', name: 'Red', hex: '#e5534b' },
@@ -28,6 +28,10 @@
     capitalShort: false,  // capital game: 4p need 2 enemy HQs, 5p need 3
     missions12: false,    // 1990s US deck: drop the two "Europe + ... + a third" missions
     maxTurns: 600,        // safety stop for computer games
+    map: 'classic',       // board: 'classic' | 'future' (Future Earth, our own design; no secret missions there)
+    // house rules, all off by default (fortify: 'unlimited' is the third end-of-turn move option)
+    noFirstAttack: false, // nobody attacks in the first round
+    teams: false,         // 4 players: two teams of two; 6 players: three teams of two (partners sit across)
   };
 
   const START = { 2: 40, 3: 35, 4: 30, 5: 25, 6: 20 };
@@ -78,15 +82,20 @@
     const n = seats.length;
     if (n < 2 || n > 6) throw new Error('2 to 6 players');
     if (n === 2 && R.mode !== 'classic') R.mode = 'classic'; // two-player game is the classic game with a neutral army
+    M.use(R.map); R.map = M.id; // the board this game is played on
+    if (R.mode === 'mission' && !M.MAPS.find(m => m.id === M.id).missions) R.mode = 'classic';
+    if (R.teams && (!(n === 4 || n === 6) || R.mode !== 'classic')) R.teams = false; // teams play for the world only
+    if (!['connected', 'adjacent', 'unlimited'].includes(R.fortify)) R.fortify = 'connected';
     const st = {
-      v: 1, rules: R,
+      v: 1, rules: R, map: R.map,
       seed: (seed >>> 0) || ((Math.random() * 4294967296) >>> 0),
       players: seats.map((s, i) => ({
         name: s.name || COLORS[i].name, kind: s.kind || 'human', level: s.level || 'medium',
         color: COLORS[i].id, hex: COLORS[i].hex,
         cards: [], out: false, pool: START[n], mission: null, capital: -1, killedBy: -1,
+        team: R.teams ? i % (n / 2) : undefined,
       })),
-      owner: new Array(N).fill(-1), armies: new Array(N).fill(0),
+      owner: new Array(T.length).fill(-1), armies: new Array(T.length).fill(0),
       deck: [], discard: [], sets: 0,
       turn: 0, round: 1, turns: 0,
       phase: 'claim', reserve: 0, quota: null,
@@ -135,8 +144,8 @@
   function log(st, text) { st.log.push(text); if (st.log.length > 120) st.log.splice(0, st.log.length - 120); }
   const pname = (st, i) => (i < 0 ? 'nobody' : st.players[i].name);
   const active = st => st.players.map((p, i) => i).filter(i => !st.players[i].out && st.players[i].kind !== 'neutral');
-  const owned = (st, p) => { const r = []; for (let t = 0; t < N; t++) if (st.owner[t] === p) r.push(t); return r; };
-  const countOwned = (st, p) => { let c = 0; for (let t = 0; t < N; t++) if (st.owner[t] === p) c++; return c; };
+  const owned = (st, p) => { const r = []; for (let t = 0; t < T.length; t++) if (st.owner[t] === p) r.push(t); return r; };
+  const countOwned = (st, p) => { let c = 0; for (let t = 0; t < T.length; t++) if (st.owner[t] === p) c++; return c; };
   const holdsCont = (st, p, ci) => CONTINENTS[ci].terrs.every(t => st.owner[t] === p);
 
   // ------------------------------------------------------------- reinforcement
@@ -206,13 +215,18 @@
     if (st.rules.fortify === 'adjacent') return ADJ[from].includes(to);
     return reachable(st, from).has(to);
   }
+  // teams: partners never attack each other and win together
+  const ally = (st, a, b) => a === b || (a >= 0 && b >= 0 && st.players[a].team != null && st.players[a].team === st.players[b].team);
+  function teamWon(st, i) { return st.phase === 'over' && st.winner >= 0 && ally(st, st.winner, i); }
   function canAttack(st, from, to) {
     const p = st.turn;
-    return st.phase === 'attack' && st.owner[from] === p && st.owner[to] !== p && st.armies[from] >= 2 && ADJ[from].includes(to);
+    if (st.rules.noFirstAttack && st.round === 1) return false;
+    return st.phase === 'attack' && st.owner[from] === p && !ally(st, p, st.owner[to]) && st.armies[from] >= 2 && ADJ[from].includes(to);
   }
 
   // ------------------------------------------------------------- apply
   function apply(st0, act) {
+    M.use(st0.map || 'classic'); // play on this game's own board
     const st = clone(st0);
     const err = applyIn(st, act);
     if (err) throw new Error(err);
@@ -252,7 +266,8 @@
         if (st.owner[a.t] !== p) return 'not yours';
         if (n < 1 || n > st.reserve || n !== Math.floor(n)) return 'bad count';
         st.armies[a.t] += n; st.reserve -= n;
-        if (st.reserve === 0) { st.phase = st.after || 'attack'; st.after = null; log(st, `${P.name} placed armies.`); }
+        // no attacks in the first round (house rule): straight to the end-of-turn move
+        if (st.reserve === 0) { st.phase = st.after || (st.rules.noFirstAttack && st.round === 1 ? 'fortify' : 'attack'); st.after = null; log(st, `${P.name} placed armies.`); }
         checkWin(st);
         return null;
       }
@@ -322,6 +337,7 @@
         const n = a.n; if (n < 1 || n > st.armies[a.from] - 1 || n !== Math.floor(n)) return 'bad count';
         st.armies[a.from] -= n; st.armies[a.to] += n;
         log(st, `${P.name} moved ${n} from ${T[a.from].name} to ${T[a.to].name}.`);
+        if (st.rules.fortify === 'unlimited') { st.phase = 'fortify'; st.moves = (st.moves || 0) + 1; return null; } // move again, or end the turn
         endTurn(st); return null;
       }
       case 'endTurn': {
@@ -420,7 +436,7 @@
   function snapshot(st) {
     if (!st.hist) st.hist = [];
     const land = st.players.map(() => 0), arm = st.players.map(() => 0);
-    for (let t = 0; t < N; t++) { const o = st.owner[t]; if (o >= 0) { land[o]++; arm[o] += st.armies[t]; } }
+    for (let t = 0; t < T.length; t++) { const o = st.owner[t]; if (o >= 0) { land[o]++; arm[o] += st.armies[t]; } }
     st.hist.push({ land, arm });
     if (st.hist.length > 400) st.hist.splice(1, 1);
   }
@@ -435,7 +451,7 @@
 
   function startTurn(st) {
     const p = st.turn;
-    st.captured = false; st.occupy = null; st.after = null; st.lastRoll = null;
+    st.captured = false; st.occupy = null; st.after = null; st.lastRoll = null; st.moves = 0;
     const inc = income(st, p);
     st.reserve = inc.total; st.income = inc;
     st.phase = 'reinforce';
@@ -472,7 +488,7 @@
       return conts.some((h, ci) => h && !need.includes(ci));
     }
     if (m.kind === 'count') {
-      let c = 0; for (let t = 0; t < N; t++) if (st.owner[t] === i && st.armies[t] >= m.min) c++;
+      let c = 0; for (let t = 0; t < T.length; t++) if (st.owner[t] === i && st.armies[t] >= m.min) c++;
       return c >= m.n;
     }
     if (m.kind === 'kill') {
@@ -498,6 +514,7 @@
     const act = active(st);
     let w = -1, how = '', kind = '';
     if (act.length === 1) { w = act[0]; how = 'conquered the world'; kind = 'world'; }
+    else if (st.rules.teams && act.length > 1 && act.every(i => ally(st, act[0], i))) { w = act.includes(st.turn) ? st.turn : act[0]; how = 'and partner conquered the world'; kind = 'team'; }
     if (w < 0 && st.rules.mode === 'mission') {
       // the player whose turn it is checks first, then the rest in order
       const order = [st.turn].concat(act.filter(i => i !== st.turn));
@@ -528,7 +545,7 @@
   const api = {
     COLORS, DEFAULT_RULES, START, newGame, apply, view, actor, income, setValue, tradeValue, isSet, findSets,
     canAttack, canFortify, reachable, owned, countOwned, holdsCont, missionText, missionDone, missionList,
-    capitalDone, capitalNeed, active, fixedValue,
+    capitalDone, capitalNeed, active, fixedValue, ally, teamWon,
   };
   if (node) module.exports = api; else root.RiskEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

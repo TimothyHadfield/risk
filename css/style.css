@@ -94,6 +94,12 @@ body.at-table .panel-col { -webkit-mask-image: linear-gradient(to bottom, #000 c
 #map .coast path { fill: none; stroke-width: 1.2; stroke-opacity: .95; pointer-events: none; transition: stroke-opacity .3s; stroke-linejoin: round; }
 #map .hits path { fill: transparent; stroke: none; pointer-events: all; cursor: pointer; }
 #map .bgland { fill: #dcd2b9; stroke: #9c9077; stroke-width: .7; pointer-events: none; }
+/* Future Earth: drowned coasts and the night sky round the Moon */
+#map .shallow { fill: #8fc3c9; fill-opacity: .55; stroke: #5f9aa1; stroke-width: .6; stroke-dasharray: 2 2; pointer-events: none; }
+#map .sky { pointer-events: none; }
+#map .sky .space { fill: #141a2b; stroke: #2c3653; stroke-width: 1; }
+#map .sky .orbit { fill: none; stroke: #4c5a80; stroke-width: .8; stroke-dasharray: 3 4; }
+#map .sky .star { fill: #e8eaf0; opacity: .8; }
 #map .contlab text { font: 800 13px Georgia, "Times New Roman", serif; text-anchor: middle; }
 #map .contlab { pointer-events: none; }
 #map .badge { cursor: pointer; }

@@ -1,5 +1,5 @@
 // Measures computer strength: plays many full games between levels.
-//   node tools/sim.js [games] [players] [mode]
+//   node tools/sim.js [games] [players] [mode] [map]   (map: classic | future)
 // e.g. node tools/sim.js 300 3        -> hard vs medium vs easy, seats rotated
 //      node tools/sim.js 300 2        -> every pair, head to head (with neutral)
 const E = require('../js/engine.js');
@@ -28,15 +28,15 @@ function table(levels, games, rules) {
   return { wins, stopped, avgRounds: (rounds / games).toFixed(1) };
 }
 if (require.main === module) {
-  const games = +process.argv[2] || 100, n = +process.argv[3] || 3, mode = process.argv[4] || 'classic';
+  const games = +process.argv[2] || 100, n = +process.argv[3] || 3, mode = process.argv[4] || 'classic', map = process.argv[5] || 'classic';
   const t0 = Date.now();
   if (n === 2) {
-    [['hard', 'medium'], ['hard', 'easy'], ['medium', 'easy']].forEach(pair => console.log(pair.join(' v '), JSON.stringify(table(pair, games, { mode }))));
+    [['hard', 'medium'], ['hard', 'easy'], ['medium', 'easy']].forEach(pair => console.log(pair.join(' v '), JSON.stringify(table(pair, games, { mode, map }))));
   } else if (n === 3) {
-    console.log('hard/medium/easy', JSON.stringify(table(['hard', 'medium', 'easy'], games, { mode })));
+    console.log('hard/medium/easy', JSON.stringify(table(['hard', 'medium', 'easy'], games, { mode, map })));
   } else {
     const lv = ['hard', 'medium', 'easy', 'medium', 'easy', 'easy'].slice(0, n);
-    console.log(lv.join('/'), JSON.stringify(table(lv, games, { mode })));
+    console.log(lv.join('/'), JSON.stringify(table(lv, games, { mode, map })));
   }
   console.log('seconds', ((Date.now() - t0) / 1000).toFixed(1));
 }

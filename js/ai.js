@@ -9,7 +9,7 @@
   const M = node ? require('./map.js') : root.RiskMap;
   const E = node ? require('./engine.js') : root.RiskEngine;
   const O = node ? require('./odds.js') : root.RiskOdds;
-  const { T, ADJ, CONTINENTS, N } = M;
+  const { T, ADJ, CONTINENTS } = M; // filled in place when the board changes (M.use)
 
   // Hard player's weights (tuned with tools/sim.js; see progress.md)
   const H = { lossW: 0.18, failW: 1.2, lowCut: 0.5, lowPen: 2, stopDiv: 0, cardV: 1.5, keepGoing: 0, split: true, stack: 0.08, atk: 'hard', plc: 'plan', fort: 'hard', def: 0, neutralV: 1, expo: 1, setup: 'hard', roll: 6, cands: 4, iw: 3, cw: 1, oppW: 1, oppTurns: 2 };
@@ -19,10 +19,12 @@
     return () => { x = (x + 0x6D2B79F5) >>> 0; let t = Math.imul(x ^ (x >>> 15), x | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
   const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
-  const enemyNbrs = (st, t) => ADJ[t].filter(u => st.owner[u] !== st.owner[t]);
+  // a partner (teams house rule) is never an enemy
+  const foe = (st, a, b) => !E.ally(st, a, b);
+  const enemyNbrs = (st, t) => ADJ[t].filter(u => foe(st, st.owner[u], st.owner[t]));
   const isBorder = (st, t) => enemyNbrs(st, t).length > 0;
   function threat(st, t) { // enemy armies that could hit t, minus our armies there
-    let e = 0; ADJ[t].forEach(u => { const o = st.owner[u]; if (o >= 0 && o !== st.owner[t] && st.players[o].kind !== 'neutral') e += st.armies[u] - 1; }); // unclaimed land threatens nobody
+    let e = 0; ADJ[t].forEach(u => { const o = st.owner[u]; if (o >= 0 && foe(st, o, st.owner[t]) && st.players[o].kind !== 'neutral') e += st.armies[u] - 1; }); // unclaimed land threatens nobody
     return e;
   }
 
@@ -42,6 +44,7 @@
 
   // ---------------------------------------------------------- main
   function choose(st, seat, opts) {
+    M.use(st.map || 'classic'); // think on this game's own board
     const P = st.players[seat], lvl = P.level || 'medium';
     const r = rng(st, seat + 1);
     switch (st.phase) {
@@ -57,7 +60,7 @@
   }
 
   function claimPick(st, p, lvl, r) {
-    const free = []; for (let t = 0; t < N; t++) if (st.owner[t] < 0) free.push(t);
+    const free = []; for (let t = 0; t < T.length; t++) if (st.owner[t] < 0) free.push(t);
     if (lvl === 'easy') return pick(r, free);
     let best = free[0], bs = -1e9;
     free.forEach(t => {
@@ -99,9 +102,9 @@
   let inRoll = false;
   function mixSeed(a, b) { let x = (a * 2654435761 + b * 97 + 12345) >>> 0; x ^= x >>> 16; x = Math.imul(x, 0x45d9f3b) >>> 0; x ^= x >>> 16; return x >>> 0; }
   function standing(st, p) { // material + income, mine against the average live opponent
-    if (st.phase === 'over') return st.winner === p ? 1e4 : -1e4;
-    const val = i => { let a = 0; for (let t = 0; t < N; t++) if (st.owner[t] === i) a += st.armies[t]; return a + E.income(st, i).total * H.iw + (Array.isArray(st.players[i].cards) ? st.players[i].cards.length : 0) * H.cw; };
-    const opp = E.active(st).filter(i => i !== p);
+    if (st.phase === 'over') return E.ally(st, st.winner, p) ? 1e4 : -1e4;
+    const val = i => { let a = 0; for (let t = 0; t < T.length; t++) if (st.owner[t] === i) a += st.armies[t]; return a + E.income(st, i).total * H.iw + (Array.isArray(st.players[i].cards) ? st.players[i].cards.length : 0) * H.cw; };
+    const opp = E.active(st).filter(i => foe(st, i, p));
     if (!opp.length) return 1e4;
     if (E.countOwned(st, p) === 0) return -1e4;
     let o = 0; opp.forEach(i => { o += val(i); });
@@ -231,6 +234,7 @@
     if (d >= 0 && st.players[d].kind !== 'neutral') {
       if (E.holdsCont(st, d, T[to].ci)) v += c.bonus * 1.2; // breaks theirs
       if (E.countOwned(st, d) === 1) v += 4 + st.players[d].cards.length * 1.5; // knock them out
+      if (st.rules.mode === 'capital' && st.players[d].capital === to) v += 6; // an enemy headquarters wins the game
       const m = st.players[p].mission;
       if (m && m.kind === 'kill' && !m.fallback && st.players[d].color === m.color) v += 2.5;
     }
@@ -243,7 +247,7 @@
     const tc = targetCont(st, p);
     let best = null, bs = 0;
     mine.forEach(f => ADJ[f].forEach(t => {
-      if (st.owner[t] === p) return;
+      if (!foe(st, p, st.owner[t])) return;
       const A = st.armies[f], D = st.armies[t];
       if (lvl === 'easy') {
         if (A > D + 1 && r() < 0.6) { const s = A - D + r(); if (s > bs) { bs = s; best = [f, t]; } }
@@ -263,7 +267,7 @@
       }
       if (H.expo) { // what is left in the new land against the enemies next to it
         const left = Math.max(1, A - 1 - O.battle(A, D).expAttLoss);
-        let th = 0; ADJ[t].forEach(u => { const o = st.owner[u]; if (u !== t && o >= 0 && o !== p && st.players[o].kind !== 'neutral') th += st.armies[u] - 1; });
+        let th = 0; ADJ[t].forEach(u => { const o = st.owner[u]; if (u !== t && o >= 0 && foe(st, o, p) && st.players[o].kind !== 'neutral') th += st.armies[u] - 1; });
         s -= pw * H.expo * Math.max(0, th - left) / 5;
       }
       // do not strip a held continent's border bare
@@ -282,7 +286,7 @@
     if (!H.split) return { type: 'occupy', n: o.max };
     // hard: split by threat between the two territories
     const total = st.armies[o.from]; // armies in `from` before moving
-    const fromEnemies = ADJ[o.from].filter(u => st.owner[u] !== p);
+    const fromEnemies = ADJ[o.from].filter(u => foe(st, st.owner[u], p));
     if (!fromEnemies.length) return { type: 'occupy', n: o.max };
     const toThreat = enemyNbrs(st, o.to).length ? threat(st, o.to) + 3 : 0;
     const fromThreat = threat(st, o.from);
@@ -314,7 +318,7 @@
     const tc = targetCont(st, p);
     const out = [];
     E.owned(st, p).filter(t => st.armies[t] >= 2).forEach(f => ADJ[f].forEach(t => {
-      if (st.owner[t] === p) return;
+      if (!E.canAttack(Object.assign({}, st, { phase: 'attack', turn: p }), f, t)) return;
       const b = O.battle(st.armies[f], st.armies[t]);
       out.push({ from: f, to: t, win: b.win, loss: b.expAttLoss, value: gain(st, p, t, tc) });
     }));

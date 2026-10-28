@@ -3,25 +3,47 @@
 // nothing jumps.
 (function (root) {
   'use strict';
-  const M = root.RiskMap, G = root.RiskGeo;
+  const M = root.RiskMap;
+  let G = M.geo; // the drawing of the board in use (classic or Future Earth); set again by draw()
   const NS = 'http://www.w3.org/2000/svg';
   const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
 
   // where each continent's bonus badge sits
   const CONT_LABEL = { na: [70, 250], sa: [330, 470], eu: [600, 30], af: [430, 470], as: [896, 268], au: [968, 380] };
   // the printed board: each continent in its own colour (like the real board); owners show by their armies
-  const BOARD = { na: '#e0b648', sa: '#d4683f', eu: '#5d87c2', af: '#b77b47', as: '#7ea558', au: '#9a6cae' };
-  const EDGE = { na: '#8a6a17', sa: '#7d3219', eu: '#2b4a78', af: '#6a421f', as: '#3f5e26', au: '#573a66' };
+  const BOARD = { na: '#e0b648', sa: '#d4683f', eu: '#5d87c2', af: '#b77b47', as: '#7ea558', au: '#9a6cae',
+    fna: '#e0b648', fsa: '#d4683f', feu: '#5d87c2', faf: '#b77b47', fas: '#7ea558', foc: '#9a6cae', fsea: '#3fa6a0', fmoon: '#b9bfc9' };
+  const EDGE = { na: '#8a6a17', sa: '#7d3219', eu: '#2b4a78', af: '#6a421f', as: '#3f5e26', au: '#573a66',
+    fna: '#8a6a17', fsa: '#7d3219', feu: '#2b4a78', faf: '#6a421f', fas: '#3f5e26', foc: '#573a66', fsea: '#1d5e5a', fmoon: '#59606b' };
   // army pieces in the crowded spots sit a little apart (still on their own land) so bigger pieces never touch:
   // Peru / Brazil / Argentina, Western Europe, Egypt / East Africa, Irkutsk / Mongolia, China / Siam. Every pair is 50+ apart.
-  const SPOT = { 10: [285.6, 407.9], 11: [336.2, 396.8], 12: [290.4, 458.9], 17: [464.7, 221.1], 21: [552.8, 294.2], 22: [568.3, 343.5], 30: [785.5, 166.4], 31: [755.9, 209.7], 34: [761.6, 259.9], 37: [753.1, 310.6] };
-  const POS = G.terr.map((t, i) => (SPOT[i] ? { x: SPOT[i][0], y: SPOT[i][1] } : { x: t.x, y: t.y }));
-  const NEAR = POS.map((t, i) => Math.min(...POS.map((u, j) => (j === i ? 1e9 : Math.hypot(u.x - t.x, u.y - t.y)))));
+  const SPOTS = { classic: { 10: [285.6, 407.9], 11: [336.2, 396.8], 12: [290.4, 458.9], 17: [464.7, 221.1], 21: [552.8, 294.2], 22: [568.3, 343.5], 30: [785.5, 166.4], 31: [755.9, 209.7], 34: [761.6, 259.9], 37: [753.1, 310.6] }, future: {} };
+  // these arrays are refilled in place when the board changes, so MapView.POS stays the same object
+  const POS = [], NEAR = [], SHORT = [];
+  function layoutFor() {
+    G = M.geo;
+    const SPOT = SPOTS[M.id] || {};
+    POS.length = 0; G.terr.forEach((t, i) => POS.push(SPOT[i] ? { x: SPOT[i][0], y: SPOT[i][1] } : { x: t.x, y: t.y }));
+    NEAR.length = 0; POS.forEach((t, i) => NEAR.push(Math.min(...POS.map((u, j) => (j === i ? 1e9 : Math.hypot(u.x - t.x, u.y - t.y))))));
+    const sh = SHORTS[M.id]; SHORT.length = 0; M.T.forEach((t, i) => SHORT.push(Array.isArray(sh) ? sh[i] : (sh && sh[t.key]) || t.name));
+  }
   // a small board gets bigger pieces: drawn at least PIECE_PX screen px wide, up to KMAX times the laptop size
   const PIECE_PX = 17.5, KMAX = 1.88;
 
   function MapView(svg, onTap) {
     this.svg = svg; this.onTap = onTap;
+    this.draw();
+    if (root.ResizeObserver) new root.ResizeObserver(() => this.setScale()).observe(svg);
+    root.addEventListener('resize', () => this.setScale());
+    const hit = e => { const t = e.target.closest('[data-t]'); if (t) this.onTap(+t.getAttribute('data-t')); };
+    svg.addEventListener('click', hit);
+    this.initZoom();
+  }
+  // (re)draw the whole board for the map in use; the zoom and tap listeners stay on the svg
+  MapView.prototype.draw = function () {
+    const svg = this.svg;
+    layoutFor(); this.mapId = M.id;
+    this.tw = {}; this.lastUpdate = null; this.kSet = false; this.contXY = null; this.tagBoxes = [];
     svg.setAttribute('viewBox', '0 0 1000 560');
     svg.innerHTML = '';
     const defs = el('defs', {}, svg);
@@ -34,6 +56,14 @@
     // the sea runs past the frame so a laptop's taller map box shows ocean, not a gap
     el('rect', { x: -1500, y: -400, width: 4000, height: 1360, fill: 'url(#sea)' }, svg);
     el('rect', { x: -1500, y: -400, width: 4000, height: 1360, fill: 'url(#waves)', opacity: .7 }, svg);
+    // Future Earth: drowned coasts (shallow water) and the night sky round the Moon
+    if (G.shallow) el('path', { d: G.shallow, class: 'shallow' }, svg);
+    if (G.moon) {
+      const m = G.moon, sky = el('g', { class: 'sky' }, svg);
+      el('circle', { cx: m.x, cy: m.y, r: m.r + 16, class: 'space' }, sky);
+      el('circle', { cx: m.x, cy: m.y, r: m.r + 9, class: 'orbit' }, sky);
+      [[-48, -30], [44, -38], [-56, 18], [52, 26], [-22, 56], [30, 55], [60, -6]].forEach(([dx, dy]) => el('circle', { cx: m.x + dx, cy: m.y + dy, r: .9, class: 'star' }, sky));
+    }
     // sea lanes / land links
     const links = el('g', { class: 'links' }, svg);
     G.links.forEach(([a, b]) => {
@@ -93,7 +123,11 @@
     this.nameMode = { all: true, focus: [] };
     // a small board (a phone shows it at ~0.4x) gets bigger pieces, numbers and labels so they stay readable
     this.k = 1;
-    const setScale = () => {
+    this.setScale();
+  };
+  MapView.prototype.setScale = function () {
+    {
+      const svg = this.svg;
       const b = svg.getBoundingClientRect(), s = Math.min(b.width / W, b.height / H);
       if (!(s > 0)) return;
       const k = +Math.max(1, Math.min(KMAX, PIECE_PX / (25 * s))).toFixed(3);
@@ -102,15 +136,15 @@
       svg.querySelectorAll('.sc').forEach(g => { if (k === 1) g.removeAttribute('transform'); else g.setAttribute('transform', `scale(${k})`); });
       this.badges.forEach((b, i) => b.hit.setAttribute('r', Math.min(Math.max(24, 12.5 * k + 3), NEAR[i] / 2).toFixed(1)));
       if (this.lastUpdate) this.update(this.lastUpdate[0], this.lastUpdate[1]); else this.layoutNames();
-    };
-    this.setScale = setScale;
-    setScale();
-    if (root.ResizeObserver) new root.ResizeObserver(setScale).observe(svg);
-    root.addEventListener('resize', setScale);
-    const hit = e => { const t = e.target.closest('[data-t]'); if (t) this.onTap(+t.getAttribute('data-t')); };
-    svg.addEventListener('click', hit);
-    this.initZoom();
-  }
+    }
+  };
+  // switch the drawing to the board of this game (classic or Future Earth); true when it changed
+  MapView.prototype.useMap = function (id) {
+    M.use(id || 'classic');
+    if (this.mapId === M.id) return false;
+    this.draw(); this.resetZoom();
+    return true;
+  };
 
   // ---- zoom: auto mode fits the whole board; pinch, wheel or + / - zoom in; fit glides back to auto
   const W = 1000, H = 560, ZMAX = 6;
@@ -175,10 +209,15 @@
   // ---- territory names: always drawn at a readable size on screen (NAME_PX), never over the army pieces,
   // the bonus boxes, the odds tags or each other. A name that has no room is left out (zoom in to see it);
   // a long name tries its short form first. The territories in play (picked, its targets) are always named.
-  const SHORT = ['Alaska', 'NW Territory', 'Greenland', 'Alberta', 'Ontario', 'Quebec', 'W. US', 'E. US', 'C. America',
+  const SHORTS = {};
+  SHORTS.classic = ['Alaska', 'NW Territory', 'Greenland', 'Alberta', 'Ontario', 'Quebec', 'W. US', 'E. US', 'C. America',
     'Venezuela', 'Peru', 'Brazil', 'Argentina', 'Iceland', 'Britain', 'Scandinavia', 'N. Europe', 'W. Europe', 'S. Europe', 'Ukraine',
     'N. Africa', 'Egypt', 'E. Africa', 'Congo', 'S. Africa', 'Madagascar', 'Ural', 'Siberia', 'Yakutsk', 'Kamchatka', 'Irkutsk',
     'Mongolia', 'Japan', 'Afghanistan', 'China', 'Middle East', 'India', 'Siam', 'Indonesia', 'New Guinea', 'W. Australia', 'E. Australia'];
+  SHORTS.future = { arctic: 'Arctic', pacific: 'Pacific', plains: 'Plains', mexico: 'Mexico', colombia: 'Colombia', cone: 'S. Cone',
+    nordic: 'Nordic', british: 'Britain', weu: 'W. Europe', ceu: 'C. Europe', med: 'Med', eeu: 'E. Europe', caf: 'C. Africa',
+    saf: 'S. Africa', casia: 'C. Asia', mideast: 'Mideast', japan: 'Japan', wau: 'W. Australia', eau: 'E. Australia',
+    natl: 'Atlantic', satl: 'S. Atlantic', indoc: 'Indian Oc.', pacc: 'Pacific Col.', tranq: 'Tranquility' };
   const NAME_PX = 10, NAME_PX_BIG = 11, ZOOM_ALL = 1.8;
   MapView.SHORT = SHORT; MapView.NAME_PX = NAME_PX;
   MapView.prototype.textW = function (i, short) { // width at font size 10, measured once
