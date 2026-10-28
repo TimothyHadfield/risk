@@ -56,3 +56,4 @@
 - **Built:** Future Earth board (46 territories, 8 regions incl. sea colonies + Moon) with a board registry; house rules (no first-round attacks, many end-of-turn moves, teams of two); Hard values enemy HQs (fixed a Capitals stall); Rules sheet "Future Earth & house rules" + "Videos"; team win counts in My stats.
 - **Verified:** `npm test` 54 pass + quit browser test; new tests seen failing first; ladder numbers in progress.md "Wave 3"; WebKit screenshots at 393, 320, 659x393, 1280, 1440 (no overflow, no errors).
 - **Open:** progress.md NOT verified (Future Earth online, a person playing a team game).
+- **Sweep (same day, d3012be):** coach 1.2.0 (offer `place:'auto'`, avoids Start: 0 px over tabs/Start at 393, 320, 659×393) + pwa 1.4.0 (data-version 18); npm test 53 pass/1 skip, quit test, pwa-check 18/18; settings 320 px no sideways scroll; selects already dark. Seen: "End-of-turn move" label squeezed to one word per line at 320 (left alone, not a sweep item).
