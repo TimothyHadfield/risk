@@ -373,7 +373,7 @@
   function offerTutorial() {
     if (!window.COACH || !tour || app.tab !== 'play' || app.game || app.net || !$('#sheet').hidden) return;
     if (tour.seen() || COACH.offered('risk-first')) return;
-    COACH.offer({ id: 'risk-first', title: 'New to Risk?', text: 'Basic Training: a guided first game against two easy computers.', yes: 'Teach me', no: 'No thanks', onYes: () => startTutorial() });
+    COACH.offer({ id: 'risk-first', title: 'New to Risk?', text: 'Basic Training: a guided first game against two easy computers.', yes: 'Teach me', no: 'No thanks', onYes: () => startTutorial(), place: 'auto', avoid: ['#startBtn'] });
   }
   function openRules() { if (window.COACH && window.RiskTutorial) { closeSheet(); COACH.rules(RiskTutorial.rules()); } }
   // replay of a finished game, turn by turn
