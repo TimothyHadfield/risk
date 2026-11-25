@@ -51,6 +51,7 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - The Russia sliver touching North Korea is given to Mongolia (else China would touch Kamchatka); Kazakhstan's far east tip is Ural and Mongolia's far west tip is Siberia so Ural-China and Siberia-China touch, as on the board; Egypt includes eastern Libya.
 
 ## Decisions (one line each)
+- 2026-11-25 Catan lessons (b0179a5): winning move stays 5 s (2.5 s Fast) with "X wins!", the winning move + dice, winner's plate glowing gold, then Game over; Game over table adds a Cards column (every hand) + every secret mission; random first player vs computers + online (`E.newGame(..., first)`: claims/places/plays first, rounds count from them; Basic Training keeps you first, Daily from its seed). Already fine: hands/missions hidden online until over (engine view), 380 ms per computer move, no duplicate controls. Checked headless WebKit 393×659 + 1280×720 from a saved near-end Missions game (no scroll, no errors).
 - Defender always rolls the most dice allowed (no prompt each roll).
 - Two players: neutral leftovers spread evenly; neutral never attacks.
 - Capitals with 6 players need every enemy HQ (the rulebook covers 3-5).
