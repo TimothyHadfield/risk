@@ -412,6 +412,21 @@
   }
 
   const DELAY = { slow: 750, normal: 380, fast: 90 };
+  // the ending is a moment, not a cut (2026-11-25, from Catan): a game seen ending live keeps the table
+  // as it was for a few seconds (winner's seat glowing, last dice shown) before the end screen
+  const FINALE_MS = 5000, FINALE_FAST = 2500;
+  let finale = null, finaleSeen = null, finaleTimer = 0;
+  const gameKey = () => (app.net ? 'net:' + app.net.code : app.game ? String(app.game.gid || 'local') : '');
+  const ending = () => !!(finale && app.game && app.game.phase === 'over' && app.rp == null && finale.id === gameKey() && Date.now() < finale.until);
+  function finaleCheck() {
+    const g = app.game, id = gameKey(), ph = g ? g.phase : '';
+    if (g && ph === 'over' && finaleSeen && finaleSeen.id === id && finaleSeen.ph !== 'over') {
+      const ms = S.speed === 'fast' ? FINALE_FAST : FINALE_MS;
+      finale = { id, until: Date.now() + ms };
+      clearTimeout(finaleTimer); finaleTimer = setTimeout(render, ms + 20);
+    }
+    finaleSeen = { id, ph };
+  }
   let tickT = 0;
   function tick() {
     clearTimeout(tickT);
@@ -550,14 +565,15 @@
     const v = viewer(); mineFor = v;
     // seats across the table
     const others = g.players.map((p, i) => i).filter(i => i !== v);
-    const sk = JSON.stringify([v, g.turn, g.phase === 'over', others.map(i => { const p = g.players[i]; return [p.name, p.out, nCards(p), E.countOwned(g, i), armiesOf(g, i)]; })]);
+    const won = i => !rp && g.phase === 'over' && ending() && (g.winner === i || (g.how === 'team' && E.ally(g, g.winner, i)));
+    const sk = JSON.stringify([v, g.turn, g.phase === 'over', won(g.winner), others.map(i => { const p = g.players[i]; return [p.name, p.out, nCards(p), E.countOwned(g, i), armiesOf(g, i)]; })]);
     if (sk !== seatsKey) {
       seatsKey = sk;
       $('#seats').innerHTML = others.map(i => {
         const p = g.players[i], turn = g.turn === i && g.phase !== 'over';
         if (p.kind === 'neutral') return `<div class="opp neutral" data-p="${i}" style="--pc:${p.hex}"><div class="tbl-plate"><i></i>Neutral</div><div class="seat-row"><span class="st num">${E.countOwned(g, i)}▲ ${armiesOf(g, i)}⚑</span></div></div>`;
         const k = nCards(p), backs = Array.from({ length: Math.min(k, 5) }, () => TABLE.back({ pattern: BACK })).join('');
-        return `<div class="opp${turn ? ' turn' : ''}${p.out ? ' out' : ''}" data-p="${i}" style="--pc:${p.hex}"><div class="tbl-plate"><i></i><span class="nm">${esc(p.name)}</span></div>` +
+        return `<div class="opp${turn ? ' turn' : ''}${p.out ? ' out' : ''}${won(i) ? ' won' : ''}" data-p="${i}" style="--pc:${p.hex}"><div class="tbl-plate"><i></i><span class="nm">${esc(p.name)}</span></div>` +
           `<div class="seat-row"><span class="backs" aria-label="${k} cards">${backs}${k ? `<b class="num">${k}</b>` : ''}</span><span class="st num">${E.countOwned(g, i)}▲ ${armiesOf(g, i)}⚑</span></div></div>`;
       }).join('');
       fitSeats();
@@ -569,10 +585,10 @@
     const toPlace = !P || !myTurn ? 0 : g.phase === 'reinforce' ? g.reserve : SETUP.includes(g.phase) ? (P.pool | 0) : 0;
     const deckN = Array.isArray(g.deck) ? g.deck.length : (g.deck | 0), disc = (g.discard || []).slice(-5);
     const sel = app.cards.filter(c => hand.includes(c));
-    const mk = JSON.stringify([v, hand, sel, pick, toPlace, deckN, disc, g.discard ? g.discard.length : 0, P && [P.name, P.hex, E.countOwned(g, v), armiesOf(g, v)], myTurn, g.phase === 'over']);
+    const mk = JSON.stringify([v, hand, sel, pick, toPlace, deckN, disc, g.discard ? g.discard.length : 0, P && [P.name, P.hex, E.countOwned(g, v), armiesOf(g, v)], myTurn, g.phase === 'over', won(v)]);
     if (mk === mineKey) return;
     mineKey = mk;
-    const me = P ? `<div class="me${myTurn && g.phase !== 'over' ? ' turn' : ''}" style="--pc:${P.hex}"><div class="tbl-plate"><i></i><span class="nm">${esc(P.name)}</span></div>${toPlace ? trayHTML(toPlace, P.hex) : `<span class="st num">${E.countOwned(g, v)}▲ ${armiesOf(g, v)}⚑</span>`}</div>` : '<div class="me"></div>';
+    const me = P ? `<div class="me${myTurn && g.phase !== 'over' ? ' turn' : ''}${won(v) ? ' won' : ''}" style="--pc:${P.hex}"><div class="tbl-plate"><i></i><span class="nm">${esc(P.name)}</span></div>${toPlace ? trayHTML(toPlace, P.hex) : `<span class="st num">${E.countOwned(g, v)}▲ ${armiesOf(g, v)}⚑</span>`}</div>` : '<div class="me"></div>';
     $('#mine').innerHTML = `${me}<div class="hand${pick ? ' pick' : ''}" id="hand"></div><div class="decks"><div id="deck" aria-label="Deck, ${deckN} cards"></div><div id="discard" aria-label="Traded cards"></div></div>`;
     TABLE.deck($('#deck'), deckN, { pattern: BACK, perCard: 0.3, max: 10 });
     // every card keeps its own small tilt by its place in the whole pile, so the pile never reshuffles on screen
@@ -742,7 +758,9 @@
     closeSheet(); if (window.COACH) COACH.closeOffer();
     const R = opts.seed ? Object.assign({}, E.DEFAULT_RULES, rules) : rules;
     seats = seats.map((s, i) => Object.assign({}, s, { name: s.name || E.COLORS[i].name + ' ' + s.level[0].toUpperCase() }));
-    app.game = E.newGame(seats, R, opts.seed); app.game.gid = Date.now(); view.resetZoom();
+    // random first player like the rulebook's high roll (2026-11-25); Basic Training keeps you first, the Daily picks from its seed
+    const first = opts.tutorial ? 0 : opts.seed ? (opts.seed >>> 0) % seats.length : Math.floor(Math.random() * seats.length);
+    app.game = E.newGame(seats, R, opts.seed, first); app.game.gid = Date.now(); view.resetZoom();
     app.sel = -1; app.to = -1; app.cards = []; app.lastHuman = -1; app.hint = null; app.undo = [];
     app.gm = { id: app.game.gid, helped: !!opts.tutorial, acc: null, recorded: false, daily: opts.daily || null, tutorial: !!opts.tutorial };
     app.rec = { id: app.game.gid, f: [] };
@@ -754,6 +772,14 @@
   function phaseBox(g) {
     const me = g.turn, P = g.players[me];
     const human = isHumanTurn();
+    if (g.phase === 'over' && ending()) {
+      // the few seconds between the winning move and the end screen: the table stays as it was
+      const W = g.players[g.winner];
+      // the winning move itself (not the win line, income or card draw)
+      let last = ''; for (let i = g.log.length - 2; i >= 0 && i >= g.log.length - 8 && !last; i--) if (!/: \+\d+ armies|drew a card|placed armies/.test(g.log[i])) last = g.log[i];
+      return `<div class="phase finale" style="--pc:${W.hex}"><div class="big" style="color:${W.hex};margin:4px 0 6px">${W.name === 'You' ? 'You win!' : esc(W.name) + (g.how === 'team' ? ' and partner win!' : ' wins!')}</div>
+        <div class="small muted">${winHow(g)}${last ? esc(last) : ''}</div>${g.lastRoll ? `<div style="margin-top:8px">${diceHTML(g.lastRoll)}</div>` : ''}</div>`;
+    }
     if (g.phase === 'over') {
       const W = g.players[g.winner];
       return `<div class="phase"><div class="cap">Game over</div><div class="big" style="color:${W.hex};margin:4px 0 6px">${W.name === 'You' ? 'You win' : g.how === 'team' && E.teamWon(g, viewer()) ? 'Your team wins' : esc(W.name) + (g.how === 'team' ? ' and partner win' : ' wins')}</div>
@@ -934,9 +960,13 @@
       if (p.kind === 'neutral') return '';
       const s = g.stats[i]; if (!s) return '';
       const L = (s.luck || 0);
-      return `<tr><td><span class="pill" style="background:${p.hex}">${esc(p.name)}</span></td><td class="r">${E.countOwned(g, i)}</td><td class="r">${s.taken}</td><td class="r" style="color:${scale(0.5 + L / 20)}">${L >= 0 ? '+' : ''}${L.toFixed(1)}</td></tr>`;
+      // once it's over, every hand and secret mission is shown, so you see how close it was (2026-11-25)
+      const hand = Array.isArray(p.cards) ? p.cards.filter(c => c >= 0 && CARDS[c]) : [];
+      const held = hand.length ? hand.map(c => CARDS[c].sym).sort().join(' ') : '–';
+      const ms = p.mission && !p.mission.hidden ? `<tr class="sub"><td colspan="5" class="small muted">${i === g.winner ? '' : 'Mission: ' + esc(E.missionText(p.mission))}</td></tr>` : '';
+      return `<tr><td><span class="pill" style="background:${p.hex}">${esc(p.name)}</span></td><td class="r">${E.countOwned(g, i)}</td><td class="r">${s.taken}</td><td class="r" style="color:${scale(0.5 + L / 20)}">${L >= 0 ? '+' : ''}${L.toFixed(1)}</td><td class="r small" title="I infantry, C cavalry, A artillery, W wild">${held}</td></tr>${i === g.winner ? '' : ms}`;
     }).join('');
-    return `<table class="t" style="margin-top:8px"><tr><th>Player</th><th class="r">Land</th><th class="r">Taken</th><th class="r">Dice luck${why('luck')}</th></tr>${rows}</table>`;
+    return `<table class="t" style="margin-top:8px"><tr><th>Player</th><th class="r">Land</th><th class="r">Taken</th><th class="r">Dice luck${why('luck')}</th><th class="r">Cards</th></tr>${rows}</table>`;
   }
 
   // land held per player, round by round
@@ -1105,6 +1135,8 @@
   // ------------------------------------------------------------ render
   function render() {
     view.useMap(app.game ? boardOf(app.game) : S.rules.map);
+    finaleCheck();
+    document.body.classList.toggle('finale', ending());
     renderTabs();
     const panel = $('#panel');
     const keep = panel.scrollTop;

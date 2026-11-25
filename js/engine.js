@@ -77,7 +77,8 @@
 
   // ------------------------------------------------------------- setup
   // seats: [{ name, kind: 'human'|'cpu'|'online', level }]
-  function newGame(seats, rules, seed) {
+  // first = the seat that claims/places first and then plays first (the rulebook's high roll; default 0)
+  function newGame(seats, rules, seed, first) {
     const R = Object.assign({}, DEFAULT_RULES, rules || {});
     const n = seats.length;
     if (n < 2 || n > 6) throw new Error('2 to 6 players');
@@ -123,9 +124,11 @@
       st.players.forEach(p => { p.mission = ms.pop(); });
       fixMissions(st);
     }
-    st.turn = 0;
+    const f = Number.isInteger(first) && first > 0 && first < n ? first : 0;
+    if (f) st.first = f;
+    st.turn = f;
     startSetupTurn(st);
-    log(st, st.phase === 'claim' ? `First to claim: ${st.players[0].name}.` : `Land dealt. First to place: ${st.players[0].name}.`);
+    log(st, st.phase === 'claim' ? `First to claim: ${st.players[f].name}.` : `Land dealt. First to place: ${st.players[f].name}.`);
     return st;
   }
   function claimT(st, t, p) { st.owner[t] = p; st.armies[t] = 1; st.players[p].pool--; }
@@ -424,7 +427,7 @@
         while (st.players[st.neutral].pool > 0 && nt.length) { st.armies[nt[k++ % nt.length]]++; st.players[st.neutral].pool--; }
       }
       st.quota = null;
-      if (st.rules.mode === 'capital') { st.phase = 'capital'; st.turn = humans[0]; log(st, 'Choose headquarters in secret.'); return; }
+      if (st.rules.mode === 'capital') { st.phase = 'capital'; st.turn = humans.includes(st.first || 0) ? (st.first || 0) : humans[0]; log(st, 'Choose headquarters in secret.'); return; }
       beginGame(st); return;
     }
     st.turn = nextIdx(st, st.turn, q => st.players[q].kind !== 'neutral' && st.players[q].pool > 0);
@@ -442,7 +445,8 @@
   }
 
   function beginGame(st) {
-    st.turn = active(st)[0];
+    const act = active(st);
+    st.turn = act.includes(st.first || 0) ? (st.first || 0) : act[0]; // the first to place plays first
     st.round = 1;
     st.hist = []; snapshot(st);
     log(st, 'The war begins.');
@@ -472,7 +476,8 @@
       st.winner = best; st.phase = 'over'; st.stop = true; st.how = 'limit'; log(st, `Turn limit reached. Most land: ${pname(st, best)}.`); return;
     }
     const next = nextIdx(st, p, q => !st.players[q].out && st.players[q].kind !== 'neutral');
-    if (next <= p) { st.round++; snapshot(st); }
+    const n = st.players.length, rel = x => (x - (st.first || 0) + n) % n; // rounds count from the first player
+    if (rel(next) <= rel(p)) { st.round++; snapshot(st); }
     st.turn = next;
     startTurn(st);
   }

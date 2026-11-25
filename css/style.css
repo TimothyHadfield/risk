@@ -184,6 +184,11 @@ body.at-table { --seats-h: 46px; --mine-h: 78px; }
 .opp .tbl-plate i, .me .tbl-plate i { width: 8px; height: 8px; border-radius: 50%; background: var(--pc); flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
 .opp.turn .tbl-plate, .me.turn .tbl-plate { border-color: var(--pc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pc) 55%, transparent), 0 2px 4px rgba(0,0,0,.4); }
 .opp.out { opacity: .38; }
+/* the few seconds after the winning move: the winner's plate glows (same gold as Catan) */
+.opp.won .tbl-plate, .me.won .tbl-plate { border-color: #f5d76e; box-shadow: 0 0 0 2px #f5d76e, 0 0 18px rgba(245,215,110,.75); animation: wonPulse 1.1s ease-in-out infinite; }
+@keyframes wonPulse { 50% { box-shadow: 0 0 0 3px #f5d76e, 0 0 26px rgba(245,215,110,.95); } }
+.phase.finale { border-left: 4px solid var(--pc); }
+@media (prefers-reduced-motion: reduce) { .opp.won .tbl-plate, .me.won .tbl-plate { animation: none; } }
 .tbl-plate .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* five across a phone: tighter name plates so the names fit */
 @media (max-width: 899px) { .seats:has(> .opp:nth-child(5)) .opp .tbl-plate { font-size: 10.5px; padding: 1px 4px; gap: 3px; } .seats:has(> .opp:nth-child(5)) .opp { min-width: 58px; } }

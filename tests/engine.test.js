@@ -287,3 +287,20 @@ test('the threat map copes with land nobody has claimed yet', () => {
   const s2 = E.apply(st, { type: 'claim', t: K.alaska });
   assert.doesNotThrow(() => AI.threat(s2, K.alaska));
 });
+
+test('random first player: claims/places first, plays first, rounds count from them', () => {
+  let st = E.newGame(seats(4), {}, 7, 2);
+  assert.strictEqual(st.turn, 2, 'first to place');
+  st = runSetup(st);
+  assert.strictEqual(st.phase, 'reinforce');
+  assert.strictEqual(st.turn, 2, 'first to play');
+  assert.strictEqual(st.round, 1);
+  const order = [st.turn];
+  while (order.length < 5 && st.phase !== 'over') {
+    const t = st.turns;
+    st = E.apply(st, AI.choose(st, E.actor(st)));
+    if (st.turns !== t) { order.push(st.turn); if (order.length === 4) assert.strictEqual(st.round, 1, 'still round 1 before the first player is up again'); }
+  }
+  assert.deepStrictEqual(order, [2, 3, 0, 1, 2]);
+  assert.strictEqual(st.round, 2);
+});

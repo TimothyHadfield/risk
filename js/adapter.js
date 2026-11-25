@@ -19,7 +19,8 @@
         if (s.kind === 'computer') return { name: E.COLORS[i].name + ' ' + level[0].toUpperCase(), kind: 'cpu', level };
         return { name: String(s.name || E.COLORS[i].name).slice(0, 20), kind: 'human', level };
       });
-      return E.newGame(S, o.rules || {}, Math.floor(rng() * 4294967296) || 1);
+      const seed = Math.floor(rng() * 4294967296) || 1;
+      return E.newGame(S, o.rules || {}, seed, Math.floor(rng() * n)); // random first player
     },
     toAct(st) { const a = E.actor(st); return a < 0 ? [] : [a]; },
     apply(st, seat, action) {
