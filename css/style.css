@@ -107,8 +107,8 @@ body.at-table .panel-col { -webkit-mask-image: linear-gradient(to bottom, #000 c
 #map .badge circle.face { stroke: rgba(0,0,0,.55); stroke-width: 1.4; transition: fill .35s ease; }
 #map .badge circle.shine { pointer-events: none; }
 #map .badge circle.hit { fill: transparent; stroke: none; pointer-events: all; }
-#map .badge text { font: 800 15px system-ui, sans-serif; text-anchor: middle; fill: #fff; pointer-events: none; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: rgba(0,0,0,.35); stroke-width: 1.6px; }
-#map .badge text.n3 { font-size: 11.5px; letter-spacing: -.04em; }
+#map .badge text { font: 800 17.5px system-ui, sans-serif; text-anchor: middle; fill: #fff; pointer-events: none; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: rgba(0,0,0,.35); stroke-width: 1.6px; }
+#map .badge text.n3 { font-size: 13.5px; letter-spacing: -.06em; }
 #map .badge.dark text { fill: #15171d; stroke: rgba(255,255,255,.35); }
 #map .badge.sel circle.face { stroke: #fff; stroke-width: 3; }
 #map .badge.cap circle.face { stroke: #f7d774; stroke-width: 3.2; stroke-dasharray: 3 2; }
@@ -192,15 +192,15 @@ body.at-table { --seats-h: 46px; --mine-h: 78px; }
 .tbl-plate .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* five across a phone: tighter name plates so the names fit */
 @media (max-width: 899px) { .seats:has(> .opp:nth-child(5)) .opp .tbl-plate { font-size: 10.5px; padding: 1px 4px; gap: 3px; } .seats:has(> .opp:nth-child(5)) .opp { min-width: 58px; } }
-@media (max-width: 359px) { .seats { gap: 3px; padding-left: 4px; padding-right: 4px; } .seats:has(> .opp:nth-child(5)) .opp { min-width: 0; } .seats:has(> .opp:nth-child(5)) .opp .tbl-plate { font-size: 9.5px; letter-spacing: -.02em; padding: 1px 3px; gap: 2px; } .seats:has(> .opp:nth-child(5)) .opp .tbl-plate i { width: 6px; height: 6px; } .seats:has(> .opp:nth-child(5)) .seat-row { font-size: 8.5px; gap: 2px; } }
-.seat-row { display: flex; align-items: center; gap: 4px; font-size: 10px; line-height: 1; color: #efe6d2; text-shadow: 0 1px 1px rgba(0,0,0,.6); white-space: nowrap; }
+@media (max-width: 359px) { .seats { gap: 3px; padding-left: 4px; padding-right: 4px; } .seats:has(> .opp:nth-child(5)) .opp { min-width: 0; } .seats:has(> .opp:nth-child(5)) .opp .tbl-plate { font-size: 10px; letter-spacing: -.02em; padding: 1px 3px; gap: 2px; } .seats:has(> .opp:nth-child(5)) .opp .tbl-plate i { width: 6px; height: 6px; } .seats:has(> .opp:nth-child(5)) .seat-row { font-size: 10px; gap: 2px; } .mine .me { width: 62px; } .mine .tray { max-width: 62px; } }
+.seat-row { display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 1; color: #efe6d2; text-shadow: 0 1px 1px rgba(0,0,0,.6); white-space: nowrap; }
 .backs { display: inline-flex; align-items: center; --card-w: 11px; }
 .backs .tbl-card { margin-left: -6px; box-shadow: 0 1px 2px rgba(0,0,0,.5); } .backs .tbl-card:first-child { margin-left: 0; }
-.backs b { margin-left: 3px; font-size: 10.5px; }
+.backs b { margin-left: 3px; font-size: 12px; }
 .st { font-variant-numeric: tabular-nums; }
 /* crowded seats (app.js fitSeats): one card back with the count, then smaller print */
 .seats.tight .backs .tbl-card:nth-child(n+2) { display: none; }
-.seats.tighter .seat-row { font-size: 8.5px; gap: 2px; letter-spacing: -.02em; } .seats.tighter .backs b { font-size: 9px; margin-left: 2px; }
+.seats.tighter .seat-row { font-size: 10px; gap: 2px; letter-spacing: -.02em; } .seats.tighter .backs b { font-size: 10px; margin-left: 2px; }
 
 /* ---------- your place at the near edge ---------- */
 .mine { flex: none; height: var(--mine-h); display: flex; align-items: flex-end; gap: 8px; padding: 0 10px 6px; position: relative; z-index: 2; }
@@ -249,14 +249,14 @@ body.at-table { --seats-h: 46px; --mine-h: 78px; }
 @media (min-width: 900px) {
   body.at-table { --seats-h: 62px; --mine-h: 132px; }
   .seats { padding: 4px 0 0; gap: 14px; justify-content: space-around; }
-  .opp { flex: 0 1 150px; gap: 5px; }
+  .opp { flex: 0 1 190px; max-width: 190px; gap: 5px; }
   .opp .tbl-plate, .me .tbl-plate { font-size: 13px; line-height: 20px; padding: 1px 10px; }
   .seat-row { font-size: 12px; gap: 8px; }
   .backs { --card-w: 16px; } .backs .tbl-card { margin-left: -9px; }
   .mine { padding: 0 6px 10px; gap: 18px; }
   .me { width: 110px; font-size: 12px; }
   .tray { max-width: 110px; } .rk-piece { width: 26px; height: 23px; } .tray b { font-size: 15px; }
-  .hand { --card-w: 76px; }
+  .hand { --card-w: 76px; } .rk-nm.long { font-size: max(10px, calc(var(--card-w) * .132)); }
   .decks { --card-w: 54px; gap: 16px; padding-bottom: 8px; }
   .dice { --die-size: 30px; }
 }

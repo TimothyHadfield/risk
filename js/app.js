@@ -596,8 +596,10 @@
     TABLE.pile($('#discard'), all.map((c, i) => (i >= all.length - 5 ? riskCard(c) : '')), { seed: 'risk-discard', max: 5, rot: 10, off: 3 });
     // the hand last, once the deck and pile have their size, so the fan gets its real width
     if (fanApi && fanApi.disconnect) fanApi.disconnect();
-    fanApi = TABLE.fan($('#hand'), hand.map(c => riskCard(c, { on: sel.includes(c), own: CARDS[c].terr >= 0 && g.owner[CARDS[c].terr] === v })), { pick: false, spread: 0.66, lift: 12, maxRot: 10, arc: 0.8 });
+    fanApi = TABLE.fan($('#hand'), hand.map(c => riskCard(c, { on: sel.includes(c), own: CARDS[c].terr >= 0 && g.owner[CARDS[c].terr] === v })), { pick: false, spread: wideHand() ? 1.06 : 0.78, lift: 12, maxRot: 10, arc: 0.8 });
   }
+  // laptop: the hand has room, so cards lie side by side (whole names showing); they overlap only when they must
+  const wideHand = () => !!(window.matchMedia && matchMedia('(min-width: 900px)').matches);
   // many players on a narrow screen: show one card back (the count stays), then smaller print, until every seat fits
   function fitSeats() {
     const box = $('#seats'), over = () => [...box.querySelectorAll('.opp')].some(o => { const r = o.querySelector('.seat-row'); return r && r.getBoundingClientRect().width > o.getBoundingClientRect().width + 0.5; });

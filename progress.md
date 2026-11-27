@@ -1,7 +1,7 @@
 # Risk — progress
 
 ## START HERE
-Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-10-28 (wave 3: Future Earth board, three house rules, learn videos, Hard values enemy HQs; see "Wave 3" below; build 15). Before that 2026-10-27 (follow-up: ending a game vs computers after your first move (End game, new game, Daily, Basic Training) counts as a loss in My stats, `abandonGame()` + `app.gm.moved`; never for Basic Training, pass-and-play or online; a Daily counts from the start as before; the Start over sheet says "This game ends and counts as a loss." when it will (wording not Tim's, flagged); `tests/quit.browser.mjs` (WebKit 393, in `npm test`, seen failing on the old build); build 14. Before that, improve pass: names, Hard, kits, Undo, replay).
+Read this, then `CLAUDE.md`, then `docs/rules-check.md`. Last updated: 2026-11-27 (fit pass: bigger map/seat numbers, laptop hand side by side; build 20). Before that 2026-10-28 (wave 3: Future Earth board, three house rules, learn videos, Hard values enemy HQs; see "Wave 3" below; build 15). Before that 2026-10-27 (follow-up: ending a game vs computers after your first move (End game, new game, Daily, Basic Training) counts as a loss in My stats, `abandonGame()` + `app.gm.moved`; never for Basic Training, pass-and-play or online; a Daily counts from the start as before; the Start over sheet says "This game ends and counts as a loss." when it will (wording not Tim's, flagged); `tests/quit.browser.mjs` (WebKit 393, in `npm test`, seen failing on the old build); build 14. Before that, improve pass: names, Hard, kits, Undo, replay).
 
 ## Goal right now
 A finished Risk site: full play with every variant, exact odds, measured computers, online seats. Next work only on Tim's request.
@@ -22,6 +22,7 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 | Basic Training guided game + rules sheet (`_coach` kit, `js/tutorial.js`), My stats / achievements / Daily game (`_profile` kit, `js/profile-risk.js`), home-screen install + offline (`_pwa` kit, `sw.js`, `js/pwa.js`, `tests/pwa-check.json`) | done 2026-10-27 |
 | Undo against the computer (one person vs computers only, never in the Daily), end-of-game replay (one frame per turn, scrubber) | done 2026-10-27 |
 | Future Earth board, house rules (no first-round attacks, many moves, teams), learn videos | done 2026-10-28, tested |
+| Fit pass 2026-11-27 (crowded 6-player game, long names, 6-card hand, 5 sizes) | done; `tests/fit-ui.mjs` (serve, then `node tests/fit-ui.mjs http://127.0.0.1:<port>/ [webkit\|chromium] [shotDir]`, not in `npm test`) |
 
 ## Standing instructions (Tim's words)
 - "add risk, clue, battleship, connect four, stratego, clue, checkers, pandemic, splendor, king of tokyo, 7 wonders, and evolution to the list of games."
@@ -51,6 +52,7 @@ A finished Risk site: full play with every variant, exact odds, measured compute
 - The Russia sliver touching North Korea is given to Mongolia (else China would touch Kamchatka); Kazakhstan's far east tip is Ural and Mongolia's far west tip is Siberia so Ural-China and Siberia-China touch, as on the board; Egypt includes eastern Libya.
 
 ## Decisions (one line each)
+- 2026-11-27 Fit pass: map army numbers 15 -> 17.5 units (3 digits 11.5 -> 13.5): 10.5 -> 12.3 px at 393/659, 8.6 -> 10.0 at 320, 13.5 -> 15.8 laptop; pieces unchanged (no new overlaps). Rivals' numbers 10 -> 12 px (320: 8.5 -> 10), names at 320 9.5 -> 10 px; laptop seats 190 px wide so full names show. Laptop hand lies side by side (fan spread 1.06 at >= 900 px, card names >= 10 px, was 9 px half-covered); phone spread 0.66 -> 0.78; 320 px "You" column 74 -> 62 px. Build 20.
 - 2026-11-25 Catan lessons (b0179a5): winning move stays 5 s (2.5 s Fast) with "X wins!", the winning move + dice, winner's plate glowing gold, then Game over; Game over table adds a Cards column (every hand) + every secret mission; random first player vs computers + online (`E.newGame(..., first)`: claims/places/plays first, rounds count from them; Basic Training keeps you first, Daily from its seed). Already fine: hands/missions hidden online until over (engine view), 380 ms per computer move, no duplicate controls. Checked headless WebKit 393×659 + 1280×720 from a saved near-end Missions game (no scroll, no errors).
 - Defender always rolls the most dice allowed (no prompt each roll).
 - Two players: neutral leftovers spread evenly; neutral never attacks.
@@ -143,6 +145,7 @@ Held up: all-computer table, reload in every phase, storage blocked, damaged sav
 - Tests: `tests/future.test.js` (10; each seen failing on the old build). Screens: WebKit 393, 320, 659x393, 1280, 1440: no overflow, no errors.
 
 ## NOT verified
+- Fit pass 2026-11-27: phone hand card names stay small (5.4 px at 393, cards overlap; troop symbol 21 px and the shape are the readable part) — 10 px names need a layout change that is Tim's call; 3-digit stacks draw 9.4 px at 393; 320 px numbers floor 10 px (board ~300 px wide); real iPhone. `tools/zoomcheck.mjs` fails 10-11 clicks on both old and new builds on this laptop (timeouts, pre-existing).
 - Wave 3: Future Earth online (rules carry `map`, guests redraw from `st.map`; reasoned, no two-browser run); team games played by a person to the end; Teams with 6 players finished by computers (only 4 tested); Medium/Easy in a Future Capitals game besides the 60-game ladder.
 - Improve pass: real iPhone; Hard's think time on a real phone (laptop max 217 ms); the guided game played start to finish by a person (steps checked headless through the first attack); "Move armies" tutorial step layout (reasoned same as the measured "New armies" one); Hard's strength in Missions mode after dropping others' missions from its look-ahead.
 - Edge pass: online leave / AFK / host hand-over only through the shared module's tests; two-tab sync while both tabs run computer turns (reasoned: equal versions are ignored).

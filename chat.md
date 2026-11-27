@@ -57,3 +57,9 @@
 - **Verified:** `npm test` 54 pass + quit browser test; new tests seen failing first; ladder numbers in progress.md "Wave 3"; WebKit screenshots at 393, 320, 659x393, 1280, 1440 (no overflow, no errors).
 - **Open:** progress.md NOT verified (Future Earth online, a person playing a team game).
 - **Sweep (same day, d3012be):** coach 1.2.0 (offer `place:'auto'`, avoids Start: 0 px over tabs/Start at 393, 320, 659×393) + pwa 1.4.0 (data-version 18); npm test 53 pass/1 skip, quit test, pwa-check 18/18; settings 320 px no sideways scroll; selects already dark. Seen: "End-of-turn move" label squeezed to one word per line at 320 (left alone, not a sweep item).
+
+## 2026-11-27 — fit pass (builder agent, manager brief)
+- **Asked:** Tim: "make sure that the user can actually see the full screen and everything ... go through every game". Scope: spacing/sizing only.
+- **Built:** map army numbers 12.3 px at 393 (was 10.5), rivals' numbers 12 px (was 10), full rival names on laptop, laptop hand side by side with 10 px names, wider phone fan, narrower "You" column at 320. Build 20.
+- **Verified:** new `tests/fit-ui.mjs` (6 players, long names, 6-card hand, 5 sizes): 13 fails on the old build, all pass WebKit + Chromium; vischeck all passed; `npm test` 54 pass + quit test.
+- **Open:** phone hand card names still ~5 px (Tim's call); progress.md NOT verified.
